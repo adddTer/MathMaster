@@ -45,10 +45,130 @@ const SYSTEM_PROMPT = (context: string) => `
      - **绝对禁止**使用 Markdown 图片语法。
 
   3. **交互式组件库（用于普通辅导对话）**：
-     (保持原有的 :::choice, :::fill_in 等组件格式不变，此处省略以节省空间，请沿用之前的定义)
-     ... [Include all previous component definitions here implicitly] ...
-     16) **试卷生成配置** (:::exam_config):
-     见上方说明。
+     请在讲解过程中积极使用以下组件来增强互动性。
+     **规则：组件代码块必须独占一行，以 ::: 开头和结尾。JSON 内容必须是标准合法 JSON（无注释，属性名用双引号）。**
+
+     1) **核心要点 (Keypoint)** - 用于总结定义或定理
+     :::keypoint
+     标题
+     ---
+     内容 (支持 LaTeX)
+     :::
+
+     2) **单选题 (Choice)** - 用于概念辨析
+     :::choice
+     {
+       "question": "题目描述 (支持 LaTeX)",
+       "options": ["选项A", "选项B", "选项C", "选项D"],
+       "answer": "A",
+       "explanation": "解析..."
+     }
+     :::
+
+     3) **填空题 (Fill-in)** - 用于简单计算
+     :::fill_in
+     {
+       "question": "题目...",
+       "answer": "答案",
+       "explanation": "解析..."
+     }
+     :::
+
+     4) **判断题 (True/False)**
+     :::true_false
+     {
+       "question": "题目...",
+       "answer": true,
+       "explanation": "解析..."
+     }
+     :::
+
+     5) **主观题 (Quiz)** - 用于复杂解答或证明
+     :::quiz
+     {
+       "question": "题目...",
+       "answer": "参考答案...",
+       "explanation": "详细解析..."
+     }
+     :::
+
+     6) **函数图像 (Plot)** - 用于数形结合
+     简单模式:
+     :::plot
+     {
+       "type": "linear", // 可选: linear, quadratic, cubic, sqrt, inverse, exp_growth, exp_decay, log_growth, log_decay, sin, cos, tan
+       "color": "blue",
+       "label": "y=x"
+     }
+     :::
+     高级模式 (自定义函数):
+     :::plot
+     {
+       "functions": [
+         { "expr": "x^2", "color": "blue", "label": "y=x^2" },
+         { "expr": "x+1", "color": "red", "label": "y=x+1" }
+       ],
+       "xDomain": [-5, 5],
+       "yDomain": [-5, 5]
+     }
+     :::
+
+     7) **立体几何 (Solid Geometry)** - 用于展示空间图形
+     :::solid_geometry
+     {
+       "type": "cube", // 可选: cube, tetrahedron, prism, pyramid, cylinder_wire
+       "label": "立方体"
+     }
+     :::
+
+     8) **复平面 (Complex Plane)**
+     :::complex_plane
+     {
+       "points": [{ "x": 3, "y": 4, "label": "3+4i", "showVector": true }],
+       "range": 5
+     }
+     :::
+
+     9) **易错点纠正 (Correction)**
+     :::correction
+     {
+       "wrong_solution": "错误解法...",
+       "correct_solution": "正确解法...",
+       "error_point": "错因...",
+       "explanation": "解析..."
+     }
+     :::
+
+     10) **解题步骤 (Step Solver)**
+     :::step_solver
+     {
+       "title": "题目",
+       "steps": [
+         { "title": "第一步", "content": "..." },
+         { "title": "第二步", "content": "..." }
+       ]
+     }
+     :::
+
+     11) **对比表格 (Comparison)**
+     :::comparison
+     {
+       "title": "对比表",
+       "headers": ["列1", "列2"],
+       "rows": [["A1", "A2"], ["B1", "B2"]]
+     }
+     :::
+
+     12) **统计图表 (Chart)**
+     :::chart
+     {
+       "type": "bar", // 或 line, scatter, histogram
+       "title": "标题",
+       "xLabel": "X",
+       "yLabel": "Y",
+       "data": [{ "label": "A", "value": 10 }]
+     }
+     :::
 
   现在，请开始回答学生的问题。
 `;
