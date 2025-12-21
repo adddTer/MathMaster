@@ -1,5 +1,5 @@
 import React from 'react';
-import { Divide, FunctionSquare, Scaling, Radical, Sigma, Triangle, Layers, Binary, Scale, Calculator, TrendingUp, Activity, Waves, LineChart, Microscope, Blend, Ruler, Fingerprint } from 'lucide-react';
+import { Divide, FunctionSquare, Scaling, Radical, Sigma, Triangle, Layers, Binary, Scale, Calculator, TrendingUp, Activity, Waves, LineChart, Microscope, Blend, Ruler, Fingerprint, Box, Shapes, BarChart3, Dices } from 'lucide-react';
 import { Topic } from '../types';
 
 // Import contents
@@ -24,8 +24,12 @@ import { Chapter9Content } from './content/chapter9';
 import { Chapter10Content } from './content/chapter10';
 import { Chapter11Content } from './content/chapter11';
 import { Chapter12Content } from './content/chapter12';
+import { Chapter13Content } from './content/chapter13';
+import { Chapter14Content } from './content/chapter14';
+import { Chapter15Content } from './content/chapter15';
 
 export const MATH_TOPICS: Topic[] = [
+  // ... (keeping existing topics array content as is, assuming it's already there) ...
   // --- 前置知识 ---
   {
     id: 'factorization',
@@ -573,5 +577,139 @@ export const MATH_TOPICS: Topic[] = [
         content: Chapter12Content.reading_history
       }
     ]
+  },
+
+  // --- 第十三章 立体几何初步 ---
+  {
+    id: 'solid-geometry-chapter',
+    category: '第十三章 立体几何初步',
+    title: '立体几何初步',
+    description: '培养空间想象力。本章将从认识基本立体图形入手，研究点、线、面之间的位置关系，并掌握简单几何体的表面积与体积计算。',
+    icon: <Box className="w-6 h-6" />,
+    subtopics: [
+        {
+            id: 'basic-solid-figs-13-1',
+            title: '13.1 基本立体图形',
+            tags: ['important'],
+            content: Chapter13Content.section13_1
+        },
+        {
+            id: 'positional-relations-13-2',
+            title: '13.2 基本图形位置关系',
+            tags: ['important', 'hard'],
+            content: Chapter13Content.section13_2
+        },
+        {
+            id: 'area-volume-13-3',
+            title: '13.3 空间图形的表面积和体积',
+            tags: ['high-school'],
+            content: Chapter13Content.section13_3
+        },
+        {
+            id: 'prismatoid-app',
+            title: '应用：拟柱体体积公式',
+            tags: ['extension'],
+            content: Chapter13Content.prismatoid_app
+        },
+        {
+            id: 'geo-history-read',
+            title: '阅读：几何学的发展',
+            tags: ['extension'],
+            content: Chapter13Content.reading_geometry
+        }
+    ]
+  },
+
+  // --- 第十四章 统计 ---
+  {
+    id: 'statistics-chapter',
+    category: '第十四章 统计',
+    title: '统计',
+    description: '数据分析的基础。本章将学习如何获取、整理和分析数据，并利用样本数据估计总体特征。',
+    icon: <BarChart3 className="w-6 h-6" />,
+    subtopics: [
+        {
+            id: 'data-acquisition-14-1',
+            title: '14.1 获取数据的基本途径',
+            content: Chapter14Content.section14_1
+        },
+        {
+            id: 'sampling-14-2',
+            title: '14.2 抽样',
+            tags: ['important'],
+            content: Chapter14Content.section14_2
+        },
+        {
+            id: 'charts-14-3',
+            title: '14.3 统计图表',
+            content: Chapter14Content.section14_3
+        },
+        {
+            id: 'estimation-14-4',
+            title: '14.4 用样本估计总体',
+            tags: ['important', 'high-school'],
+            content: Chapter14Content.section14_3 // Reusing the same section as it contains charts + estimation
+        },
+        {
+            id: 'electricity-app',
+            title: '应用：阶梯电价的设计',
+            tags: ['extension'],
+            content: Chapter14Content.section14_app
+        },
+        {
+            id: 'engel-read',
+            title: '阅读：恩格尔系数',
+            tags: ['extension'],
+            content: Chapter14Content.reading_engel
+        }
+    ]
+  },
+
+  // --- 第十五章 概率 ---
+  {
+    id: 'probability-chapter',
+    category: '第十五章 概率',
+    title: '概率',
+    description: '研究随机现象的数学模型。本章将引入样本空间和随机事件，学习古典概型及事件的独立性。',
+    icon: <Dices className="w-6 h-6" />,
+    subtopics: [
+        {
+            id: 'random-events-15-1',
+            title: '15.1 随机事件和样本空间',
+            content: Chapter15Content.section15_1
+        },
+        {
+            id: 'classical-prob-15-2',
+            title: '15.2 随机事件的概率',
+            tags: ['important'],
+            content: Chapter15Content.section15_2
+        },
+        {
+            id: 'mutual-indep-15-3',
+            title: '15.3 互斥事件和独立事件',
+            tags: ['important', 'high-school'],
+            content: Chapter15Content.section15_3
+        },
+        {
+            id: 'fair-rules-inquiry',
+            title: '探究：确定公平的规则',
+            tags: ['extension'],
+            content: Chapter15Content.inquiry_fair
+        },
+        {
+            id: 'pascal-triangle-read',
+            title: '阅读：杨辉三角与概率',
+            tags: ['extension'],
+            content: Chapter15Content.reading_pascal
+        }
+    ]
   }
 ];
+
+// Helper: Get a plain text summary of the curriculum
+export const getCurriculumSummary = (): string => {
+    return MATH_TOPICS.map(topic => {
+        const subs = topic.subtopics.map(sub => `  - ${sub.title}`).join('\n');
+        return `章节: ${topic.title}\n描述: ${topic.description}\n内容:\n${subs}`;
+    }).join('\n\n');
+};

@@ -28,7 +28,7 @@ export const ComplexPlane: React.FC<ComplexPlaneProps> = ({
   showGrid = true,
   label
 }) => {
-  const padding = 40;
+  const padding = 30;
   const width = size;
   const height = size;
   
@@ -42,37 +42,38 @@ export const ComplexPlane: React.FC<ComplexPlaneProps> = ({
   const originY = height / 2;
 
   // Grid generation
-  const gridLines = useMemo(() => {
+  const { gridLines, axisLabels } = useMemo(() => {
     const lines = [];
+    const labels = [];
     const step = 1; // Grid step
     // Extend grid slightly beyond range to fill view
     const gridRange = Math.ceil(range);
     
     for (let i = -gridRange; i <= gridRange; i += step) {
         if (i === 0) continue;
-        // Vertical lines
-        lines.push(
-            <line key={`v${i}`} 
-                x1={mapX(i)} y1={padding} 
-                x2={mapX(i)} y2={height - padding} 
-                stroke="#f1f5f9" strokeWidth="1" 
-            />
-        );
-        // Horizontal lines
-        lines.push(
-            <line key={`h${i}`} 
-                x1={padding} y1={mapY(i)} 
-                x2={width - padding} y2={mapY(i)} 
-                stroke="#f1f5f9" strokeWidth="1" 
-            />
-        );
+        
+        const xPos = mapX(i);
+        const yPos = mapY(i);
+
+        // Grid lines only if within bounds
+        if (xPos >= padding && xPos <= width - padding) {
+             lines.push(<line key={`v${i}`} x1={xPos} y1={padding} x2={xPos} y2={height - padding} stroke="#f1f5f9" strokeWidth="1" />);
+             // Axis Numbers (Real)
+             labels.push(<text key={`xl${i}`} x={xPos} y={originY + 15} fontSize="9" fill="#94a3b8" textAnchor="middle">{i}</text>);
+        }
+        
+        if (yPos >= padding && yPos <= height - padding) {
+             lines.push(<line key={`h${i}`} x1={padding} y1={yPos} x2={width - padding} y2={yPos} stroke="#f1f5f9" strokeWidth="1" />);
+             // Axis Numbers (Imaginary)
+             labels.push(<text key={`yl${i}`} x={originX - 8} y={yPos + 3} fontSize="9" fill="#94a3b8" textAnchor="end">{i}i</text>);
+        }
     }
-    return lines;
+    return { gridLines: lines, axisLabels: labels };
   }, [range, width, height]);
 
   return (
     <div className="flex flex-col items-center my-6 group">
-      <div className="relative bg-white border border-slate-200 rounded-xl overflow-visible shadow-sm hover:shadow-md transition-shadow" style={{ width, height }}>
+      <div className="relative bg-white border border-slate-200 rounded-xl overflow-visible shadow-sm hover:shadow-md transition-shadow" style={{ width: '100%', maxWidth: size, aspectRatio: '1/1' }}>
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
           <defs>
             <marker id="arrow-plane" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
@@ -100,14 +101,14 @@ export const ComplexPlane: React.FC<ComplexPlaneProps> = ({
           )}
 
           {/* Axes */}
-          {/* X Axis */}
           <line x1={padding} y1={originY} x2={width - padding} y2={originY} stroke="#64748b" strokeWidth="1.5" markerEnd="url(#arrow-plane)" />
-          {/* Y Axis */}
           <line x1={originX} y1={height - padding} x2={originX} y2={padding} stroke="#64748b" strokeWidth="1.5" markerEnd="url(#arrow-plane)" />
           
-          <text x={width - 25} y={originY + 15} fontSize="10" fill="#64748b" fontWeight="bold" fontFamily="sans-serif">Re</text>
-          <text x={originX + 8} y={25} fontSize="10" fill="#64748b" fontWeight="bold" fontFamily="sans-serif">Im</text>
-          <text x={originX - 12} y={originY + 12} fontSize="10" fill="#64748b" fontFamily="sans-serif">O</text>
+          <text x={width - 25} y={originY - 8} fontSize="10" fill="#64748b" fontWeight="bold" fontFamily="sans-serif">Re</text>
+          <text x={originX + 8} y={padding + 10} fontSize="10" fill="#64748b" fontWeight="bold" fontFamily="sans-serif">Im</text>
+          <text x={originX - 10} y={originY + 15} fontSize="9" fill="#94a3b8" fontFamily="sans-serif">0</text>
+          
+          {showGrid && axisLabels}
 
           {/* Points & Vectors */}
           {points.map((pt, i) => {
@@ -124,8 +125,6 @@ export const ComplexPlane: React.FC<ComplexPlaneProps> = ({
                     <>
                       <line x1={px} y1={py} x2={px} y2={originY} stroke={color} strokeWidth="1" strokeDasharray="3 2" opacity="0.4" />
                       <line x1={px} y1={py} x2={originX} y2={py} stroke={color} strokeWidth="1" strokeDasharray="3 2" opacity="0.4" />
-                      <text x={px} y={originY + 12} fontSize="9" fill={color} textAnchor="middle" opacity="0.8">{pt.x}</text>
-                      <text x={originX - 5} y={py + 3} fontSize="9" fill={color} textAnchor="end" opacity="0.8">{pt.y}i</text>
                     </>
                   )}
 
@@ -140,8 +139,6 @@ export const ComplexPlane: React.FC<ComplexPlaneProps> = ({
                             opacity="0.6"
                         />
                         <text x={originX + 25} y={originY - 8 * Math.sign(pt.y || 1)} fontSize="9" fill={color}>θ</text>
-                        {/* r label - roughly mid vector */}
-                        <text x={originX + (px - originX)/2 - 5} y={originY + (py - originY)/2 - 5} fontSize="9" fill={color} fontWeight="bold">r</text>
                       </>
                   )}
 
@@ -151,12 +148,12 @@ export const ComplexPlane: React.FC<ComplexPlaneProps> = ({
                   )}
 
                   {/* Point */}
-                  <circle cx={px} cy={py} r="3.5" fill="white" stroke={color} strokeWidth="2" />
+                  <circle cx={px} cy={py} r="4" fill="white" stroke={color} strokeWidth="2" />
                   
                   {/* Label */}
                   {pt.label && (
-                      <foreignObject x={px + 5} y={py - 20} width="100" height="30" style={{ overflow: 'visible' }}>
-                          <div className="text-xs font-bold whitespace-nowrap px-1 py-0.5 rounded bg-white/80 backdrop-blur-sm shadow-sm inline-block border border-slate-100" style={{ color: color }}>
+                      <foreignObject x={px + 5} y={py - 25} width="120" height="40" style={{ overflow: 'visible' }}>
+                          <div className="text-xs font-bold whitespace-nowrap px-2 py-1 rounded bg-white/90 backdrop-blur-sm shadow-sm inline-block border border-slate-100" style={{ color: color }}>
                               <MathFormula tex={pt.label} />
                           </div>
                       </foreignObject>

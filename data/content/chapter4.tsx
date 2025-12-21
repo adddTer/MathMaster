@@ -1,6 +1,6 @@
 import React from 'react';
 import { MathFormula } from '../../components/MathFormula';
-import { Calculator, ArrowRightLeft, Spline } from 'lucide-react';
+import { Calculator, ArrowRightLeft, Spline, AlertTriangle } from 'lucide-react';
 
 const FormulaCard = ({ children, className = '' }: { children?: React.ReactNode; className?: string }) => (
   <div className={`bg-white border-l-4 border-primary-500 shadow-sm border-y border-r border-slate-200 rounded-r-xl p-5 text-center my-4 ${className}`}>
@@ -170,6 +170,28 @@ export const Chapter4Content = {
                     <MathFormula tex="\log_a M^n = n \log_a M" className="text-lg" />
                 </div>
             </div>
+
+            <WarningCard title="考点警示：定义域陷阱">
+                <p className="text-sm">
+                    使用公式时务必注意<span className="font-bold text-red-600">等价性</span>，特别是定义域的变化。
+                </p>
+                <div className="mt-3 p-3 bg-white rounded border border-amber-200 text-xs text-slate-600 space-y-2">
+                    <div className="flex items-center justify-between">
+                        <span><MathFormula tex="\log_a (x^2)" /> 的定义域</span>
+                        <span className="font-bold"><MathFormula tex="x \ne 0" /></span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-amber-100 pt-2">
+                        <span><MathFormula tex="2\log_a x" /> 的定义域</span>
+                        <span className="font-bold"><MathFormula tex="x > 0" /></span>
+                    </div>
+                    <div className="text-center text-amber-600 pt-1 font-bold">
+                        <MathFormula tex="\log_a (x^2) \ne 2\log_a x" /> (除非 x > 0)
+                    </div>
+                    <div className="text-center text-slate-400">
+                        正确公式：<MathFormula tex="\log_a (x^2) = 2\log_a |x|" />
+                    </div>
+                </div>
+            </WarningCard>
         </div>
 
         {/* 换底公式 */}

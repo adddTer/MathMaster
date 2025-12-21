@@ -1,6 +1,6 @@
 import React from 'react';
 import { MathFormula } from '../../components/MathFormula';
-import { Move, ArrowUpRight, Maximize, Minimize, Compass, Anchor, Scale, Grid } from 'lucide-react';
+import { Move, ArrowUpRight, Maximize, Minimize, Compass, Anchor, Scale, Grid, ArrowDownRight } from 'lucide-react';
 
 const FormulaCard = ({ children, className = '' }: { children?: React.ReactNode; className?: string }) => (
   <div className={`bg-white border-l-4 border-primary-500 shadow-sm border-y border-r border-slate-200 rounded-r-xl p-5 text-center my-4 ${className}`}>
@@ -220,6 +220,43 @@ export const Chapter9Content = {
                 </div>
             </div>
         </div>
+
+        {/* 数量积 (Dot Product) - New Curriculum Addition */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <h4 className="font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2 text-lg flex items-center gap-2">
+                <ArrowDownRight className="w-5 h-5 text-purple-500" /> 3. 数量积 (内积)
+            </h4>
+            
+            <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 text-center mb-6">
+                <span className="text-xs text-purple-600 font-bold mb-1 uppercase tracking-wider">Definition</span>
+                <MathFormula tex="\boldsymbol{a} \cdot \boldsymbol{b} = |\boldsymbol{a}||\boldsymbol{b}|\cos\theta" block className="text-2xl font-bold text-purple-900" />
+                <div className="text-xs text-purple-500 mt-2">
+                    <MathFormula tex="\theta" /> 是 <MathFormula tex="\boldsymbol{a}" /> 与 <MathFormula tex="\boldsymbol{b}" /> 的夹角 (<MathFormula tex="0 \le \theta \le \pi" />)
+                </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+                <div className="p-4 border border-slate-200 rounded-xl bg-slate-50">
+                    <h5 className="font-bold text-slate-700 text-sm mb-3">几何意义：投影向量</h5>
+                    <p className="text-xs text-slate-600 mb-2 leading-relaxed">
+                        <span className="font-bold">新课标重点：</span>
+                        <MathFormula tex="\boldsymbol{a} \cdot \boldsymbol{b}" /> 等于 <MathFormula tex="\boldsymbol{a}" /> 的长度与 <MathFormula tex="\boldsymbol{b}" /> 在 <MathFormula tex="\boldsymbol{a}" /> 方向上的<span className="font-bold text-indigo-600">投影向量</span>的“数值”乘积。
+                    </p>
+                    <div className="bg-white p-2 rounded border border-slate-100 text-xs">
+                        <div><span className="font-bold">数量射影：</span> <MathFormula tex="|\boldsymbol{b}|\cos\theta" /></div>
+                        <div className="mt-1"><span className="font-bold text-indigo-600">投影向量：</span> <MathFormula tex="(|\boldsymbol{b}|\cos\theta)\frac{\boldsymbol{a}}{|\boldsymbol{a}|}" /></div>
+                    </div>
+                </div>
+
+                <div className="p-4 border border-slate-200 rounded-xl bg-slate-50">
+                    <h5 className="font-bold text-slate-700 text-sm mb-3">物理意义：功</h5>
+                    <p className="text-xs text-slate-600 mb-2">
+                        力 <MathFormula tex="\boldsymbol{F}" /> 对物体做功 <MathFormula tex="W" />，等于力与位移 <MathFormula tex="\boldsymbol{s}" /> 的数量积。
+                    </p>
+                    <MathFormula tex="W = \boldsymbol{F} \cdot \boldsymbol{s}" block className="text-lg text-slate-800" />
+                </div>
+            </div>
+        </div>
     </div>
   ),
   section9_3: (
@@ -332,14 +369,6 @@ export const Chapter9Content = {
                         <div className="w-24 h-24 bg-white rounded border border-slate-200 flex items-center justify-center">
                             <Anchor className="w-10 h-10 text-slate-300" />
                         </div>
-                    </div>
-                </div>
-
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <h5 className="font-bold text-slate-700 mb-2">3. 物理应用：功的计算</h5>
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">力 <MathFormula tex="\boldsymbol{F}" /> 作用于物体，使物体产生位移 <MathFormula tex="\boldsymbol{s}" />，则功 <MathFormula tex="W" /> 为：</span>
-                        <MathFormula tex="W = \boldsymbol{F} \cdot \boldsymbol{s} = |\boldsymbol{F}||\boldsymbol{s}|\cos\theta" className="bg-white px-3 py-1 rounded border border-slate-200 font-bold text-slate-700"/>
                     </div>
                 </div>
             </div>

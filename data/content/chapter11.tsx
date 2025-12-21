@@ -118,28 +118,46 @@ export const Chapter11Content = {
 
         <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100 shadow-sm">
             <h4 className="font-bold text-indigo-900 mb-3 text-lg">多解问题 (SSA)</h4>
-            <p className="text-sm text-slate-600 mb-4">
-                已知 <MathFormula tex="a, b" /> 和 <MathFormula tex="A" /> (即两边及其中一边的对角)，求 <MathFormula tex="B" />。
-                <br/>
-                需根据 <MathFormula tex="a" /> 与 <MathFormula tex="b \sin A" /> 的关系判断解的个数。
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-xs">
-                <div className="bg-white p-2 rounded border border-indigo-100">
-                    <div className="font-bold text-slate-700 mb-1">无解</div>
-                    <MathFormula tex="a < b \sin A" />
+            <div className="text-xs text-indigo-700 mb-3 bg-white p-2 rounded inline-block border border-indigo-100">
+                前提：已知 <MathFormula tex="a, b, A" />，即两边及其中一边的对角。
+            </div>
+            
+            <div className="space-y-3">
+                <div>
+                    <span className="font-bold text-sm text-slate-700 block mb-1">情况 1：A 为锐角</span>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-xs">
+                        <div className="bg-white p-2 rounded border border-indigo-100">
+                            <div className="font-bold text-slate-700 mb-1">无解</div>
+                            <MathFormula tex="a < b \sin A" />
+                        </div>
+                        <div className="bg-white p-2 rounded border border-indigo-100">
+                            <div className="font-bold text-slate-700 mb-1">一解</div>
+                            <MathFormula tex="a = b \sin A" />
+                            <div>(直角)</div>
+                        </div>
+                        <div className="bg-white p-2 rounded border border-indigo-100">
+                            <div className="font-bold text-slate-700 mb-1">两解</div>
+                            <MathFormula tex="b \sin A < a < b" />
+                        </div>
+                        <div className="bg-white p-2 rounded border border-indigo-100">
+                            <div className="font-bold text-slate-700 mb-1">一解</div>
+                            <MathFormula tex="a \ge b" />
+                        </div>
+                    </div>
                 </div>
-                <div className="bg-white p-2 rounded border border-indigo-100">
-                    <div className="font-bold text-slate-700 mb-1">一解</div>
-                    <MathFormula tex="a = b \sin A" />
-                    <div>(直角)</div>
-                </div>
-                <div className="bg-white p-2 rounded border border-indigo-100">
-                    <div className="font-bold text-slate-700 mb-1">两解</div>
-                    <MathFormula tex="b \sin A < a < b" />
-                </div>
-                <div className="bg-white p-2 rounded border border-indigo-100">
-                    <div className="font-bold text-slate-700 mb-1">一解</div>
-                    <MathFormula tex="a \ge b" />
+                
+                <div>
+                    <span className="font-bold text-sm text-slate-700 block mb-1">情况 2：A 为直角或钝角</span>
+                    <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                        <div className="bg-white p-2 rounded border border-slate-200">
+                            <div className="font-bold text-slate-700 mb-1">无解</div>
+                            <MathFormula tex="a \le b" />
+                        </div>
+                        <div className="bg-white p-2 rounded border border-slate-200">
+                            <div className="font-bold text-slate-700 mb-1">一解</div>
+                            <MathFormula tex="a > b" />
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

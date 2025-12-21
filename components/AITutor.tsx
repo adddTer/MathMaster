@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Bot, User, Sparkles, Loader2, RefreshCw, Settings, Save, AlertCircle, CheckCircle2, XCircle, RefreshCcw, Maximize2, Minimize2, Info, HelpCircle, BookOpen, Construction, BrainCircuit, PenTool, History, Plus, MessageSquare, Trash2, ChevronLeft, Pin, PinOff, Edit2, Download, Upload, MoreHorizontal, Check, X, Square, CheckSquare, MoreVertical, Archive, ListChecks } from 'lucide-react';
-import { ChatMessage, AIConfig, AIProvider, ChatSession } from '../types';
+import { Send, Bot, User, Sparkles, Loader2, RefreshCw, Settings, Save, AlertCircle, CheckCircle2, XCircle, RefreshCcw, Maximize2, Minimize2, Info, HelpCircle, BookOpen, Construction, BrainCircuit, PenTool, History, Plus, MessageSquare, Trash2, ChevronLeft, Pin, PinOff, Edit2, Download, Upload, MoreHorizontal, Check, X, Square, CheckSquare, MoreVertical, Archive, ListChecks, FileText, Play } from 'lucide-react';
+import { ChatMessage, AIConfig, AIProvider, ChatSession, ExamSession } from '../types';
 import { sendMessageToGeminiStream, fetchOpenAIModels, testGeminiConnection, repairMalformedJson, evaluateQuizAnswer } from '../services/geminiService';
 import { MessageRenderer, blockRegex } from './MessageRenderer';
+import { ExamRunner } from './ExamComponents';
 
 interface AITutorProps {
   currentContext: string;
@@ -31,6 +32,7 @@ const DEFAULT_CONFIG: AIConfig = {
 };
 
 const STORAGE_KEY_SESSIONS = 'math_ai_chat_sessions';
+const STORAGE_KEY_EXAMS = 'math_ai_exams';
 
 // Safer access to process.env to prevent ReferenceError in browser
 const getSystemEnvKey = (): string => {
@@ -127,7 +129,6 @@ const ConfirmModal = ({
 
 export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, onClearInitialQuery }) => {
   // --- Sessions State ---
-  // Initialize lazily from localStorage to prevent undefined errors on first render
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
       try {
           if (typeof window !== 'undefined') {
@@ -153,22 +154,34 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
   
   // History View Interaction States
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingExamId, setEditingExamId] = useState<string | null>(null); // For Exam Rename
   const [editTitleInput, setEditTitleInput] = useState('');
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null); // For the 3-dot menu
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null); 
   
   // Batch Operations State
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
   
   // Delete Confirmation
-  const [deleteModal, setDeleteModal] = useState<{isOpen: boolean, targetIds: string[]}>({
+  const [deleteModal, setDeleteModal] = useState<{isOpen: boolean, targetIds: string[], type: 'session' | 'exam'}>({
       isOpen: false,
-      targetIds: []
+      targetIds: [],
+      type: 'session'
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const zipInputRef = useRef<HTMLInputElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null); // For click outside menu close
+  const menuRef = useRef<HTMLDivElement>(null); 
+
+  // --- Exam State ---
+  const [exams, setExams] = useState<ExamSession[]>(() => {
+      try {
+          const saved = localStorage.getItem(STORAGE_KEY_EXAMS);
+          if (saved) return JSON.parse(saved);
+      } catch(e) {}
+      return [];
+  });
+  const [activeExam, setActiveExam] = useState<ExamSession | null>(null);
 
   // --- UI State ---
   const [input, setInput] = useState('');
@@ -181,6 +194,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   // --- Config State ---
   const [config, setConfig] = useState<AIConfig>(DEFAULT_CONFIG);
+  const [draftConfig, setDraftConfig] = useState<AIConfig>(DEFAULT_CONFIG); // Temp state for settings menu
   const [hasConfigured, setHasConfigured] = useState(false);
   const [useEnvKey, setUseEnvKey] = useState(false);
   const [availableModels, setAvailableModels] = useState<{gemini: ModelOption[], openai: ModelOption[]}>({
@@ -204,18 +218,20 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Save Sessions (Debounced slightly or on change)
-  // Logic: Only save sessions that have content (>1 message) or are pinned.
+  // Save Sessions
   useEffect(() => {
-      // We filter what goes into localStorage to prevent junk buildup
       const sessionsToSave = sessions.filter(s => s.messages.length > 1 || s.isPinned);
-      
       if (sessionsToSave.length > 0) {
           localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(sessionsToSave));
       } else {
           localStorage.removeItem(STORAGE_KEY_SESSIONS);
       }
   }, [sessions]);
+
+  // Save Exams
+  useEffect(() => {
+      localStorage.setItem(STORAGE_KEY_EXAMS, JSON.stringify(exams));
+  }, [exams]);
 
   // Load Config
   useEffect(() => {
@@ -243,6 +259,15 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
     if (savedConfig) {
       try {
         const parsed = JSON.parse(savedConfig);
+        
+        // --- DEV MODE AUTO MODEL UPGRADE ---
+        if ((savedDebug === 'true' || useEnvKey) && SYSTEM_ENV_KEY) {
+            if (parsed.provider === 'gemini' && parsed.modelId !== 'gemini-3-pro-preview') {
+                parsed.modelId = 'gemini-3-pro-preview';
+                console.log("Dev Mode: Auto-switched to Gemini 3 Pro");
+            }
+        }
+        
         if (!parsed.modelId) {
             parsed.modelId = parsed.provider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.5-flash';
         }
@@ -258,9 +283,28 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
         console.error("Failed to parse config", e);
       }
     } else {
-        if (!savedDebug) setShowSettings(true);
+        // If no config but ENV KEY present, auto config
+        if (SYSTEM_ENV_KEY) {
+            setConfig({
+                provider: 'gemini',
+                apiKey: '',
+                modelId: 'gemini-3-pro-preview'
+            });
+            setUseEnvKey(true);
+            setHasConfigured(true);
+        } else {
+            if (!savedDebug) setShowSettings(true);
+        }
     }
   }, []);
+
+  // Sync draft config when opening settings
+  useEffect(() => {
+      if (showSettings) {
+          setDraftConfig(config);
+          setTestStatus('idle');
+      }
+  }, [showSettings, config]);
 
   // --- Session Management Handlers ---
 
@@ -269,7 +313,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       return sessions.find(s => s.id === currentSessionId) || sessions[0];
   }, [sessions, currentSessionId]);
 
-  // Define messages derived from current session
   const messages = currentSession?.messages || [];
 
   const updateCurrentSessionMessages = (newMessages: ChatMessage[], newTitle?: string) => {
@@ -291,7 +334,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   const handleNewChat = () => {
       const newSession = createNewSessionHelper();
-      // Add new session to top
       setSessions(prev => sortSessions([newSession, ...prev]));
       setCurrentSessionId(newSession.id);
       setIsHistoryView(false);
@@ -299,54 +341,61 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       if (inputRef.current) inputRef.current.focus();
   };
 
-  const requestDelete = (ids: string[]) => {
+  const requestDelete = (ids: string[], type: 'session' | 'exam' = 'session') => {
       if (ids.length === 0) return;
       setDeleteModal({
           isOpen: true,
-          targetIds: ids
+          targetIds: ids,
+          type
       });
       setMenuOpenId(null);
   };
 
   const confirmDelete = () => {
-      const { targetIds } = deleteModal;
+      const { targetIds, type } = deleteModal;
       if (targetIds.length === 0) return;
 
-      const newSessions = sessions.filter(s => !targetIds.includes(s.id));
-      
-      if (newSessions.length === 0) {
-          const newSession = createNewSessionHelper();
-          setSessions([newSession]);
-          setCurrentSessionId(newSession.id);
-      } else {
-          setSessions(newSessions);
-          if (targetIds.includes(currentSessionId)) {
-              setCurrentSessionId(newSessions[0].id);
+      if (type === 'session') {
+          const newSessions = sessions.filter(s => !targetIds.includes(s.id));
+          if (newSessions.length === 0) {
+              const newSession = createNewSessionHelper();
+              setSessions([newSession]);
+              setCurrentSessionId(newSession.id);
+          } else {
+              setSessions(newSessions);
+              if (targetIds.includes(currentSessionId)) {
+                  setCurrentSessionId(newSessions[0].id);
+              }
           }
+          if (isBatchMode) {
+              setSelectedSessionIds(new Set());
+          }
+      } else {
+          // Delete Exams
+          setExams(prev => prev.filter(e => !targetIds.includes(e.id)));
       }
       
-      // Clear batch selection if batch delete
-      if (isBatchMode) {
-          setSelectedSessionIds(new Set());
-      }
-      
-      setDeleteModal({ isOpen: false, targetIds: [] });
-      showNotify(`已删除 ${targetIds.length} 个对话`, 'success');
+      setDeleteModal({ isOpen: false, targetIds: [], type: 'session' });
+      showNotify(`已删除 ${targetIds.length} 项`, 'success');
   };
 
   const handleTogglePin = (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
+      setMenuOpenId(null); // Ensure menu closes
       setSessions(prev => {
           const updated = prev.map(s => s.id === id ? { ...s, isPinned: !s.isPinned } : s);
           return sortSessions(updated);
       });
-      setMenuOpenId(null);
   };
 
-  const startEditing = (e: React.MouseEvent, session: ChatSession) => {
+  const startEditing = (e: React.MouseEvent, id: string, initialTitle: string, type: 'session' | 'exam' = 'session') => {
       e.stopPropagation();
-      setEditingSessionId(session.id);
-      setEditTitleInput(session.title);
+      if (type === 'session') {
+          setEditingSessionId(id);
+      } else {
+          setEditingExamId(id);
+      }
+      setEditTitleInput(initialTitle);
       setMenuOpenId(null);
   };
 
@@ -357,16 +406,31 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
               setSessions(prev => prev.map(s => s.id === editingSessionId ? { ...s, title: editTitleInput.trim() } : s));
           }
           setEditingSessionId(null);
+      } else if (editingExamId) {
+          if (editTitleInput.trim()) {
+              const newTitle = editTitleInput.trim();
+              // Check uniqueness
+              let uniqueTitle = newTitle;
+              let count = 1;
+              // Check against ALL exams except the current one
+              while (exams.some(ex => ex.id !== editingExamId && ex.config.title === uniqueTitle)) {
+                  uniqueTitle = `${newTitle} (${count})`;
+                  count++;
+              }
+              
+              setExams(prev => prev.map(ex => ex.id === editingExamId ? { ...ex, config: { ...ex.config, title: uniqueTitle }} : ex));
+          }
+          setEditingExamId(null);
       }
   };
 
   // --- Import / Export Handlers ---
 
-  const handleExportSingle = (session: ChatSession) => {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(session));
+  const handleExportSingle = (data: ChatSession | ExamSession, type: 'session' | 'exam', title: string) => {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
       const downloadAnchorNode = document.createElement('a');
       downloadAnchorNode.setAttribute("href", dataStr);
-      downloadAnchorNode.setAttribute("download", `MathAI_${session.title.replace(/[\\/:*?"<>|]/g, '')}_${new Date().toISOString().slice(0,10)}.json`);
+      downloadAnchorNode.setAttribute("download", `MathAI_${type}_${title.replace(/[\\/:*?"<>|]/g, '')}_${new Date().toISOString().slice(0,10)}.json`);
       document.body.appendChild(downloadAnchorNode);
       downloadAnchorNode.click();
       downloadAnchorNode.remove();
@@ -385,7 +449,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   const handleExportAll = async () => {
       await generateZipExport(sessions);
-      setMenuOpenId(null); // Close menu if open
+      setMenuOpenId(null);
   };
 
   const generateZipExport = async (sessionsToExport: ChatSession[]) => {
@@ -402,6 +466,15 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
               const safeTitle = s.title.replace(/[\\/:*?"<>|]/g, '_') || 'Untitled';
               zip.file(`${safeTitle}_${s.id.slice(-4)}.json`, JSON.stringify(s, null, 2));
           });
+
+          // Export Exams to a separate folder in the zip
+          if (exams.length > 0) {
+              const examsFolder = zip.folder("exams");
+              exams.forEach(ex => {
+                  const safeTitle = ex.config.title.replace(/[\\/:*?"<>|]/g, '_') || 'Untitled';
+                  examsFolder.file(`${safeTitle}_${ex.id.slice(-4)}.json`, JSON.stringify(ex, null, 2));
+              });
+          }
 
           const content = await zip.generateAsync({ type: "blob" });
           const url = URL.createObjectURL(content);
@@ -435,6 +508,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       const jsZip = new window.JSZip();
       jsZip.loadAsync(file).then(async (zip: any) => {
           const newSessions: ChatSession[] = [];
+          const newExams: ExamSession[] = [];
           
           const promises: Promise<void>[] = [];
           zip.forEach((relativePath: string, zipEntry: any) => {
@@ -444,11 +518,19 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                           try {
                               const json = JSON.parse(content);
                               if (Array.isArray(json.messages)) {
+                                  // It's a ChatSession
                                   newSessions.push({
                                       ...json,
-                                      id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // Renew ID to avoid conflict
+                                      id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // Renew ID
                                       updatedAt: Date.now(),
                                       isPinned: false
+                                  });
+                              } else if (json.questions && Array.isArray(json.questions)) {
+                                  // It's likely an ExamSession
+                                  newExams.push({
+                                      ...json,
+                                      id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // Renew ID
+                                      updatedAt: Date.now()
                                   });
                               }
                           } catch (err) {
@@ -463,9 +545,15 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
           
           if (newSessions.length > 0) {
               setSessions(prev => sortSessions([...newSessions, ...prev]));
-              showNotify(`成功导入 ${newSessions.length} 个对话`, "success");
+          }
+          if (newExams.length > 0) {
+              setExams(prev => [...newExams, ...prev]);
+          }
+          
+          if (newSessions.length > 0 || newExams.length > 0) {
+              showNotify(`导入成功: ${newSessions.length} 个对话, ${newExams.length} 份试卷`, "success");
           } else {
-              showNotify("压缩包中未找到有效的对话文件", "info");
+              showNotify("压缩包中未找到有效文件", "info");
           }
       }).catch((e: any) => {
           showNotify("文件解析失败", "error");
@@ -517,14 +605,16 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   // Save Config
   const handleSaveConfig = () => {
-    localStorage.setItem('math_ai_config', JSON.stringify(config));
+    localStorage.setItem('math_ai_config', JSON.stringify(draftConfig));
     localStorage.setItem('math_ai_custom_models', JSON.stringify(availableModels.openai));
     localStorage.setItem('math_ai_debug_mode', String(useEnvKey));
     
-    const isConfigured = !!config.apiKey || (useEnvKey && !!SYSTEM_ENV_KEY);
+    // Commit draft to actual config
+    setConfig(draftConfig);
+
+    const isConfigured = !!draftConfig.apiKey || (useEnvKey && !!SYSTEM_ENV_KEY);
     setHasConfigured(isConfigured);
     setShowSettings(false);
-    setTestStatus('idle'); 
     
     if (isConfigured) {
         showNotify("配置已保存", 'success');
@@ -536,14 +626,27 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       setTestStatus('idle');
   };
 
+  // Get effective config for usage (using real config state)
   const getEffectiveConfig = () => {
       if (useEnvKey && SYSTEM_ENV_KEY) {
           return {
               ...config,
-              apiKey: SYSTEM_ENV_KEY
+              apiKey: SYSTEM_ENV_KEY,
+              modelId: config.modelId || 'gemini-3-pro-preview' // Enforce robust default in Dev
           };
       }
       return config;
+  };
+
+  // For testing in settings, use draft config
+  const getDraftEffectiveConfig = () => {
+      if (useEnvKey && SYSTEM_ENV_KEY) {
+          return {
+              ...draftConfig,
+              apiKey: SYSTEM_ENV_KEY
+          };
+      }
+      return draftConfig;
   };
 
   const isConnected = !!config.apiKey || (useEnvKey && !!SYSTEM_ENV_KEY);
@@ -552,8 +655,8 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       const modelList = provider === 'gemini' ? availableModels.gemini : availableModels.openai;
       const defaultModel = modelList.length > 0 ? modelList[0].id : '';
       
-      setConfig({
-          ...config,
+      setDraftConfig({
+          ...draftConfig,
           provider,
           modelId: defaultModel
       });
@@ -561,9 +664,9 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
   };
 
   const handleTestAndFetch = async () => {
-      const effectiveConfig = getEffectiveConfig();
+      const effectiveTestConfig = getDraftEffectiveConfig();
 
-      if (!effectiveConfig.apiKey) {
+      if (!effectiveTestConfig.apiKey) {
           setTestStatus('error');
           setTestMessage('未找到 API Key');
           return;
@@ -574,12 +677,13 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       setTestMessage('');
 
       try {
-          if (effectiveConfig.provider === 'openai') {
-              const models = await fetchOpenAIModels(effectiveConfig);
+          if (effectiveTestConfig.provider === 'openai') {
+              const models = await fetchOpenAIModels(effectiveTestConfig);
               if (models.length > 0) {
                   setAvailableModels(prev => ({ ...prev, openai: models }));
-                  if (!models.find(m => m.id === effectiveConfig.modelId)) {
-                      setConfig(prev => ({ ...prev, modelId: models[0].id }));
+                  // Update draft config with first model if current is invalid
+                  if (!models.find(m => m.id === effectiveTestConfig.modelId)) {
+                      setDraftConfig(prev => ({ ...prev, modelId: models[0].id }));
                   }
                   setTestStatus('success');
                   setTestMessage(`成功！获取 ${models.length} 个模型`);
@@ -588,7 +692,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                    setTestMessage('连接成功，但模型列表为空');
               }
           } else {
-              await testGeminiConnection(effectiveConfig.apiKey);
+              await testGeminiConnection(effectiveTestConfig.apiKey);
               setTestStatus('success');
               setTestMessage('连接成功！');
           }
@@ -613,12 +717,10 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
     }
   };
 
-  // Scroll on new message added (length changed) or loading started
   useEffect(() => {
     scrollToBottom();
   }, [messages.length, isLoading]);
 
-  // Scroll on view/layout changes
   useEffect(() => {
     scrollToBottom();
   }, [showSettings, isFullscreen, isHistoryView]);
@@ -636,25 +738,20 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
     const userMsg: ChatMessage = { role: 'user', text: textToSend };
     
-    // Auto-generate title if it's the first user message in a new chat
     let newTitle = undefined;
     if (currentSession.title === '新对话' && messages.length <= 2) {
         newTitle = textToSend.slice(0, 15) + (textToSend.length > 15 ? '...' : '');
     }
 
-    // Add user message immediately
     const updatedMessagesWithUser = [...messages, userMsg];
     updateCurrentSessionMessages(updatedMessagesWithUser, newTitle);
 
     setInput('');
     setIsLoading(true);
 
-    // Add placeholder for model response
-    // We update session state to include the placeholder
     const placeholderMsg: ChatMessage = { role: 'model', text: '' };
     updateCurrentSessionMessages([...updatedMessagesWithUser, placeholderMsg], newTitle);
 
-    // Prepare history for API (filter out errors and empty placeholders from previous turns if any)
     const historyForApi = updatedMessagesWithUser.filter(m => !m.isError);
 
     let accumulatedResponse = '';
@@ -668,7 +765,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
           (chunk) => {
               accumulatedResponse += chunk;
               
-              // Direct state update for streaming performance
               setSessions(prev => {
                   return prev.map(s => {
                       if (s.id === (currentSession.id || currentSessionId)) {
@@ -694,7 +790,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
           if (s.id === (currentSession.id || currentSessionId)) {
               const msgs = [...s.messages];
               const lastMsg = msgs[msgs.length - 1];
-              // Replace placeholder or append error
               if (lastMsg.role === 'model' && lastMsg.text === '') {
                    msgs[msgs.length - 1] = { role: 'model', text: `出错了: ${error.message}`, isError: true };
               } else {
@@ -726,8 +821,31 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
   };
 
   const getTagFromContent = (str: string) => {
-      const match = str.match(/:::(quiz|keypoint|choice|fill_in|true_false|step_solver|comparison|correction|checklist|tips|suggestions)/);
+      const match = str.match(/:::(quiz|keypoint|choice|fill_in|true_false|step_solver|comparison|correction|checklist|tips|suggestions|plot|chart|complex_plane|solid_geometry)/);
       return match ? `:::${match[1]}` : ':::';
+  };
+
+  // Handle Exam Interactions
+  const handleExamCreated = (exam: ExamSession) => {
+      // Handle naming collision for new exams
+      let newTitle = exam.config.title;
+      let count = 1;
+      
+      while (exams.some(e => e.config.title === newTitle)) {
+          newTitle = `${exam.config.title} (${count})`;
+          count++;
+      }
+      
+      const newExam = { ...exam, config: { ...exam.config, title: newTitle } };
+      
+      setExams(prev => [newExam, ...prev]);
+      setActiveExam(newExam);
+      return newExam;
+  };
+
+  const handleSaveExam = (updatedExam: ExamSession) => {
+      setExams(prev => prev.map(e => e.id === updatedExam.id ? updatedExam : e));
+      setActiveExam(updatedExam);
   };
 
   const handleComponentInteract = async (action: string, payload?: any, msgIndex?: number, blockIndex?: number) => {
@@ -739,6 +857,46 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
           return;
       }
 
+      // Launch exam runner & Update state to persist the "Done" view
+      if (action === 'start_exam') {
+          const incomingExam = payload.exam;
+          
+          // Check if already exists in global store
+          const existingExam = exams.find(e => e.id === incomingExam.id);
+          
+          let fullExam = existingExam || incomingExam;
+          
+          if (!existingExam) {
+               // Check if incoming is full (has content)
+               if (incomingExam.questions && incomingExam.questions.length > 0 && incomingExam.questions[0].content) {
+                   fullExam = handleExamCreated(incomingExam);
+               } else {
+                   showNotify("无法找到试卷数据 (可能已被删除)", "error");
+                   return;
+               }
+          } else {
+               setActiveExam(fullExam);
+          }
+
+          if (typeof msgIndex === 'number' && typeof blockIndex === 'number') {
+              // Create a lite version for the chat UI to save space and decouple
+              // We keep enough info for the "Done" card to render
+              const liteExam = {
+                  id: fullExam.id,
+                  config: fullExam.config,
+                  status: 'done', 
+                  // Mock questions array with correct length for the UI count
+                  questions: Array(fullExam.questions.length).fill({}) 
+              };
+              
+              handleUpdateMessageState(msgIndex, blockIndex, { 
+                  status: 'done', 
+                  generatedExam: liteExam 
+              });
+          }
+          return;
+      }
+
       const effectiveConfig = getEffectiveConfig();
       if (!effectiveConfig.apiKey) {
            showNotify("请先配置 API Key", "error");
@@ -746,6 +904,11 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       }
 
       if (typeof msgIndex === 'number' && typeof blockIndex === 'number' && payload?.state) {
+          handleUpdateMessageState(msgIndex, blockIndex, payload.state);
+      }
+      
+      // Update state handler specifically for ExamGeneratorBlock persistence
+      if (action === 'update_state' && typeof msgIndex === 'number' && typeof blockIndex === 'number') {
           handleUpdateMessageState(msgIndex, blockIndex, payload.state);
       }
 
@@ -777,10 +940,13 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                    if (s.id === (currentSession.id || currentSessionId)) {
                        const newMsg = [...s.messages];
                        const msgToFix = newMsg[msgIndex];
+                       // Safe split using the same regex (preserving newlines via capturing group now)
                        const parts = msgToFix.text.split(blockRegex);
+                       
                        if (parts[blockIndex]) {
                            const originalTag = getTagFromContent(parts[blockIndex]);
-                           // Ensure correct block format with newlines
+                           // Replace with corrected block. Newline management handled by surrounding text or regex capture.
+                           // Standard form: \n:::tag\n{json}\n:::\n
                            parts[blockIndex] = `\n${originalTag}\n${fixedJson}\n:::\n`;
                            
                            newMsg[msgIndex] = {
@@ -823,6 +989,18 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   // --- Render Views ---
 
+  // Exam Runner Overlay
+  if (activeExam) {
+      return (
+          <ExamRunner 
+              exam={activeExam} 
+              aiConfig={getEffectiveConfig()}
+              onClose={() => setActiveExam(null)}
+              onSave={handleSaveExam}
+          />
+      );
+  }
+
   if (showSettings) {
       return (
         <div className={containerClass}>
@@ -832,7 +1010,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                     <h2 className="font-semibold text-sm">AI 配置</h2>
                 </div>
                 <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-slate-600">
-                    <span className="text-xs">关闭</span>
+                    <span className="text-xs">关闭 (不保存)</span>
                 </button>
             </div>
             
@@ -857,7 +1035,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                             <button 
                                 onClick={() => handleProviderChange('gemini')}
                                 className={`p-3 rounded-lg border text-sm font-medium flex flex-col items-center gap-2 transition-all ${
-                                    config.provider === 'gemini' 
+                                    draftConfig.provider === 'gemini' 
                                     ? 'bg-primary-50 border-primary-500 text-primary-700 ring-1 ring-primary-500' 
                                     : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                                 }`}
@@ -868,7 +1046,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                             <button 
                                 onClick={() => handleProviderChange('openai')}
                                 className={`p-3 rounded-lg border text-sm font-medium flex flex-col items-center gap-2 transition-all ${
-                                    config.provider === 'openai' 
+                                    draftConfig.provider === 'openai' 
                                     ? 'bg-green-50 border-green-500 text-green-700 ring-1 ring-green-500' 
                                     : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                                 }`}
@@ -879,6 +1057,12 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                         </div>
                     </div>
 
+                    <div className="text-sm text-slate-500 bg-slate-50 p-4 rounded-xl border border-slate-200 mt-6 leading-relaxed">
+                        <h4 className="font-bold text-slate-700 mb-2">关于试卷功能</h4>
+                        <p className="mb-2">试卷功能正处于测试阶段，AI 出题可能存在格式错误或逻辑偏差，建议人工复核。</p>
+                        <p>请选择具备深度思考能力的模型（如 Pro/Plus 版本），以确保试题质量。</p>
+                    </div>
+
                     <div className={useEnvKey ? 'opacity-50 pointer-events-none grayscale' : ''}>
                         <label className="block text-sm font-medium text-slate-700 mb-2 flex justify-between">
                             <span>API Key</span>
@@ -886,21 +1070,21 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                         </label>
                         <input 
                             type="password" 
-                            value={useEnvKey ? 'SYSTEM_ENV_KEY_ACTIVE' : config.apiKey}
-                            onChange={(e) => setConfig({...config, apiKey: e.target.value})}
-                            placeholder={config.provider === 'gemini' ? "AIzaSy..." : "sk-..."}
+                            value={useEnvKey ? 'SYSTEM_ENV_KEY_ACTIVE' : draftConfig.apiKey}
+                            onChange={(e) => setDraftConfig({...draftConfig, apiKey: e.target.value})}
+                            placeholder={draftConfig.provider === 'gemini' ? "AIzaSy..." : "sk-..."}
                             className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
                             disabled={useEnvKey}
                         />
                     </div>
 
-                    {config.provider === 'openai' && (
+                    {draftConfig.provider === 'openai' && (
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-2">Base URL (可选)</label>
                             <input 
                                 type="text" 
-                                value={config.baseUrl || ''}
-                                onChange={(e) => setConfig({...config, baseUrl: e.target.value})}
+                                value={draftConfig.baseUrl || ''}
+                                onChange={(e) => setDraftConfig({...draftConfig, baseUrl: e.target.value})}
                                 placeholder="https://api.openai.com/v1"
                                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
                             />
@@ -910,7 +1094,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                     <div className="flex items-center gap-3">
                         <button
                             onClick={handleTestAndFetch}
-                            disabled={(!config.apiKey && !useEnvKey) || isTesting}
+                            disabled={(!draftConfig.apiKey && !useEnvKey) || isTesting}
                             className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
                         >
                             {isTesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
@@ -928,15 +1112,15 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                         <label className="block text-sm font-medium text-slate-700 mb-2">选择模型</label>
                         <div className="relative">
                             <select 
-                                value={config.modelId} 
-                                onChange={(e) => setConfig({...config, modelId: e.target.value})}
-                                disabled={config.provider === 'openai' && availableModels.openai.length === 0}
+                                value={draftConfig.modelId} 
+                                onChange={(e) => setDraftConfig({...draftConfig, modelId: e.target.value})}
+                                disabled={draftConfig.provider === 'openai' && availableModels.openai.length === 0}
                                 className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none appearance-none"
                             >
-                                {(config.provider === 'gemini' ? availableModels.gemini : availableModels.openai).map(model => (
+                                {(draftConfig.provider === 'gemini' ? availableModels.gemini : availableModels.openai).map(model => (
                                     <option key={model.id} value={model.id}>{model.name}</option>
                                 ))}
-                                {config.provider === 'openai' && availableModels.openai.length === 0 && (
+                                {draftConfig.provider === 'openai' && availableModels.openai.length === 0 && (
                                     <option disabled>请先配置 Key 并测试连接以加载模型</option>
                                 )}
                             </select>
@@ -966,9 +1150,9 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                <ConfirmModal 
                   isOpen={deleteModal.isOpen}
                   title="确认删除"
-                  content={`确定要删除选中的 ${deleteModal.targetIds.length} 个对话吗？此操作无法撤销。`}
+                  content={`确定要删除选中的 ${deleteModal.targetIds.length} 项吗？此操作无法撤销。`}
                   onConfirm={confirmDelete}
-                  onCancel={() => setDeleteModal({isOpen: false, targetIds: []})}
+                  onCancel={() => setDeleteModal({...deleteModal, isOpen: false})}
                />
                <input 
                   type="file" 
@@ -986,6 +1170,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                       <h2 className="font-semibold text-sm">历史对话</h2>
                   </div>
                   <div className="flex items-center gap-2">
+                       {/* ... Existing header buttons ... */}
                        {isBatchMode ? (
                            <>
                                 <button onClick={selectAll} className="text-slate-500 text-xs font-medium px-2 py-1 hover:bg-slate-100 rounded-lg">
@@ -1021,111 +1206,212 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                   </div>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-20">
-                  {sessions.length === 0 && (
-                      <div className="text-center text-slate-400 py-10 text-sm">
-                          暂无历史对话
+              <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-20">
+                  {/* Exams List Section */}
+                  {exams.length > 0 && (
+                      <div className="space-y-2">
+                          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">我的试卷</h3>
+                          {exams.map(exam => {
+                              // Calculate Score if available
+                              const totalScore = exam.questions.reduce((acc, q) => acc + (q.obtainedScore || 0), 0);
+                              const maxScore = exam.questions.reduce((acc, q) => acc + q.score, 0);
+                              const isGraded = exam.status === 'submitted' || exam.status === 'graded';
+
+                              return (
+                              <div 
+                                  key={exam.id}
+                                  className="group p-3 rounded-xl border border-slate-200 bg-white hover:bg-indigo-50 hover:border-indigo-200 transition-all flex items-center justify-between"
+                              >
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                      <div className={`p-2 rounded-lg shrink-0 ${exam.status === 'submitted' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                                          <FileText className="w-4 h-4" />
+                                      </div>
+                                      <div className="min-w-0 flex-1 relative">
+                                          {editingExamId === exam.id ? (
+                                              <div className="flex items-center gap-2 pr-2" onClick={e => e.stopPropagation()}>
+                                                  <input 
+                                                      type="text" 
+                                                      value={editTitleInput}
+                                                      onChange={e => setEditTitleInput(e.target.value)}
+                                                      onKeyDown={e => e.key === 'Enter' && saveTitle()}
+                                                      className="w-full text-sm border-2 border-primary-500 rounded-md px-2 py-1 bg-white text-slate-900 shadow-sm focus:outline-none"
+                                                      autoFocus
+                                                  />
+                                                  <button onClick={saveTitle} className="p-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 shadow-sm"><Check className="w-3.5 h-3.5" /></button>
+                                                  <button onClick={(e) => { e.stopPropagation(); setEditingExamId(null); }} className="p-1.5 bg-slate-200 text-slate-600 rounded-md hover:bg-slate-300 shadow-sm"><X className="w-3.5 h-3.5" /></button>
+                                              </div>
+                                          ) : (
+                                              <div>
+                                                  <div className="font-medium text-sm text-slate-800 truncate">{exam.config.title}</div>
+                                                  <div className="text-xs text-slate-400 flex items-center gap-2">
+                                                      <span>{new Date(exam.createdAt).toLocaleDateString()}</span>
+                                                      <span>•</span>
+                                                      <span>{exam.questions.length} 题</span>
+                                                      {isGraded && (
+                                                          <>
+                                                            <span>•</span>
+                                                            <span className="font-bold text-emerald-600">{totalScore}/{maxScore} 分</span>
+                                                          </>
+                                                      )}
+                                                  </div>
+                                              </div>
+                                          )}
+                                      </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2 relative ml-2" ref={menuOpenId === `exam-${exam.id}` ? menuRef : null}>
+                                       <button 
+                                            onClick={() => setActiveExam(exam)}
+                                            className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-lg flex items-center gap-1 text-xs font-bold"
+                                       >
+                                           <Play className="w-3.5 h-3.5" /> 打开
+                                       </button>
+                                       <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setMenuOpenId(menuOpenId === `exam-${exam.id}` ? null : `exam-${exam.id}`);
+                                            }}
+                                            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+                                       >
+                                            <MoreVertical className="w-4 h-4" />
+                                       </button>
+                                       
+                                       {menuOpenId === `exam-${exam.id}` && (
+                                            <div className="absolute right-0 top-8 w-32 bg-white border border-slate-200 shadow-lg rounded-lg z-20 py-1 flex flex-col animate-in fade-in zoom-in-95 duration-100">
+                                                <button 
+                                                    onClick={(e) => startEditing(e, exam.id, exam.config.title, 'exam')} 
+                                                    className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                                >
+                                                    <Edit2 className="w-3.5 h-3.5" /> 重命名
+                                                </button>
+                                                <button 
+                                                    onClick={(e) => handleExportSingle(exam, 'exam', exam.config.title)} 
+                                                    className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                                >
+                                                    <Download className="w-3.5 h-3.5" /> 导出 JSON
+                                                </button>
+                                                <div className="h-px bg-slate-100 my-1"></div>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); requestDelete([exam.id], 'exam'); }} 
+                                                    className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" /> 删除
+                                                </button>
+                                            </div>
+                                        )}
+                                  </div>
+                              </div>
+                          )})}
                       </div>
                   )}
-                  {sessions.map(session => (
-                      <div 
-                          key={session.id} 
-                          onClick={() => {
-                              if (isBatchMode) {
-                                  toggleSessionSelect(session.id);
-                              } else {
-                                  setCurrentSessionId(session.id);
-                                  setIsHistoryView(false);
-                              }
-                          }}
-                          className={`group p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                              isBatchMode 
-                                ? (selectedSessionIds.has(session.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200')
-                                : (session.id === currentSessionId ? 'bg-primary-50 border-primary-200 ring-1 ring-primary-200' : 'bg-white border-slate-200 hover:bg-slate-50 hover:shadow-sm')
-                          }`}
-                      >
-                          <div className="flex items-center gap-3 overflow-hidden flex-1">
-                              {isBatchMode ? (
-                                  <div className={`shrink-0 ${selectedSessionIds.has(session.id) ? 'text-indigo-600' : 'text-slate-300'}`}>
-                                      {selectedSessionIds.has(session.id) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
-                                  </div>
-                              ) : (
-                                  <div className={`p-2 rounded-lg shrink-0 ${session.id === currentSessionId ? 'bg-primary-100 text-primary-600' : 'bg-slate-100 text-slate-500'}`}>
-                                      <MessageSquare className="w-4 h-4" />
-                                  </div>
-                              )}
-                              
-                              <div className="min-w-0 flex-1 relative">
-                                  {editingSessionId === session.id ? (
-                                      <div className="flex items-center gap-2 pr-2" onClick={e => e.stopPropagation()}>
-                                          <input 
-                                              type="text" 
-                                              value={editTitleInput}
-                                              onChange={e => setEditTitleInput(e.target.value)}
-                                              onKeyDown={e => e.key === 'Enter' && saveTitle()}
-                                              className="w-full text-sm border-2 border-primary-500 rounded-md px-2 py-1 bg-white text-slate-900 shadow-sm focus:outline-none"
-                                              autoFocus
-                                          />
-                                          <button onClick={saveTitle} className="p-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 shadow-sm"><Check className="w-3.5 h-3.5" /></button>
-                                          <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(null); }} className="p-1.5 bg-slate-200 text-slate-600 rounded-md hover:bg-slate-300 shadow-sm"><X className="w-3.5 h-3.5" /></button>
+
+                  {/* Chat Sessions List Section */}
+                  <div className="space-y-2">
+                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">对话记录</h3>
+                      {sessions.length === 0 && (
+                          <div className="text-center text-slate-400 py-4 text-sm">暂无历史对话</div>
+                      )}
+                      {sessions.map(session => (
+                          <div 
+                              key={session.id} 
+                              onClick={() => {
+                                  if (isBatchMode) {
+                                      toggleSessionSelect(session.id);
+                                  } else {
+                                      setCurrentSessionId(session.id);
+                                      setIsHistoryView(false);
+                                  }
+                              }}
+                              className={`group p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                                  isBatchMode 
+                                    ? (selectedSessionIds.has(session.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200')
+                                    : (session.id === currentSessionId ? 'bg-primary-50 border-primary-200 ring-1 ring-primary-200' : 'bg-white border-slate-200 hover:bg-slate-50 hover:shadow-sm')
+                              }`}
+                          >
+                              {/* ... Existing Session Item Rendering ... */}
+                              <div className="flex items-center gap-3 overflow-hidden flex-1">
+                                  {isBatchMode ? (
+                                      <div className={`shrink-0 ${selectedSessionIds.has(session.id) ? 'text-indigo-600' : 'text-slate-300'}`}>
+                                          {selectedSessionIds.has(session.id) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
                                       </div>
                                   ) : (
-                                      <>
-                                          <div className={`font-medium text-sm truncate flex items-center gap-1.5 ${session.id === currentSessionId ? 'text-primary-900' : 'text-slate-700'}`}>
-                                              {session.isPinned && <Pin className="w-3 h-3 fill-slate-400 text-slate-400 rotate-45" />}
-                                              {session.title}
-                                          </div>
-                                          <div className="text-xs text-slate-400">{new Date(session.updatedAt).toLocaleString()}</div>
-                                      </>
+                                      <div className={`p-2 rounded-lg shrink-0 ${session.id === currentSessionId ? 'bg-primary-100 text-primary-600' : 'bg-slate-100 text-slate-500'}`}>
+                                          <MessageSquare className="w-4 h-4" />
+                                      </div>
                                   )}
+                                  
+                                  <div className="min-w-0 flex-1 relative">
+                                      {editingSessionId === session.id ? (
+                                          <div className="flex items-center gap-2 pr-2" onClick={e => e.stopPropagation()}>
+                                              <input 
+                                                  type="text" 
+                                                  value={editTitleInput}
+                                                  onChange={e => setEditTitleInput(e.target.value)}
+                                                  onKeyDown={e => e.key === 'Enter' && saveTitle()}
+                                                  className="w-full text-sm border-2 border-primary-500 rounded-md px-2 py-1 bg-white text-slate-900 shadow-sm focus:outline-none"
+                                                  autoFocus
+                                              />
+                                              <button onClick={saveTitle} className="p-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 shadow-sm"><Check className="w-3.5 h-3.5" /></button>
+                                              <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(null); }} className="p-1.5 bg-slate-200 text-slate-600 rounded-md hover:bg-slate-300 shadow-sm"><X className="w-3.5 h-3.5" /></button>
+                                          </div>
+                                      ) : (
+                                          <>
+                                              <div className={`font-medium text-sm truncate flex items-center gap-1.5 ${session.id === currentSessionId ? 'text-primary-900' : 'text-slate-700'}`}>
+                                                  {session.isPinned && <Pin className="w-3 h-3 fill-slate-400 text-slate-400 rotate-45" />}
+                                                  {session.title}
+                                              </div>
+                                              <div className="text-xs text-slate-400">{new Date(session.updatedAt).toLocaleString()}</div>
+                                          </>
+                                      )}
+                                  </div>
                               </div>
+                              
+                              {!isBatchMode && (
+                                <div className="relative ml-2" ref={menuOpenId === session.id ? menuRef : null}>
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setMenuOpenId(menuOpenId === session.id ? null : session.id);
+                                        }}
+                                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+                                    >
+                                        <MoreVertical className="w-4 h-4" />
+                                    </button>
+                                    
+                                    {menuOpenId === session.id && (
+                                        <div className="absolute right-0 top-8 w-32 bg-white border border-slate-200 shadow-lg rounded-lg z-20 py-1 flex flex-col animate-in fade-in zoom-in-95 duration-100">
+                                            <button 
+                                                onClick={(e) => handleTogglePin(e, session.id)} 
+                                                className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                            >
+                                                {session.isPinned ? <><PinOff className="w-3.5 h-3.5" /> 取消置顶</> : <><Pin className="w-3.5 h-3.5" /> 置顶</>}
+                                            </button>
+                                            <button 
+                                                onClick={(e) => startEditing(e, session.id, session.title, 'session')} 
+                                                className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                            >
+                                                <Edit2 className="w-3.5 h-3.5" /> 重命名
+                                            </button>
+                                            <button 
+                                                onClick={(e) => handleExportSingle(session, 'session', session.title)} 
+                                                className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                            >
+                                                <Download className="w-3.5 h-3.5" /> 导出 JSON
+                                            </button>
+                                            <div className="h-px bg-slate-100 my-1"></div>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); requestDelete([session.id], 'session'); }} 
+                                                className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" /> 删除
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                              )}
                           </div>
-                          
-                          {!isBatchMode && (
-                            <div className="relative ml-2" ref={menuOpenId === session.id ? menuRef : null}>
-                                <button 
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setMenuOpenId(menuOpenId === session.id ? null : session.id);
-                                    }}
-                                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
-                                >
-                                    <MoreVertical className="w-4 h-4" />
-                                </button>
-                                
-                                {menuOpenId === session.id && (
-                                    <div className="absolute right-0 top-8 w-32 bg-white border border-slate-200 shadow-lg rounded-lg z-20 py-1 flex flex-col animate-in fade-in zoom-in-95 duration-100">
-                                        <button 
-                                            onClick={(e) => handleTogglePin(e, session.id)} 
-                                            className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                        >
-                                            {session.isPinned ? <><PinOff className="w-3.5 h-3.5" /> 取消置顶</> : <><Pin className="w-3.5 h-3.5" /> 置顶</>}
-                                        </button>
-                                        <button 
-                                            onClick={(e) => startEditing(e, session)} 
-                                            className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                        >
-                                            <Edit2 className="w-3.5 h-3.5" /> 重命名
-                                        </button>
-                                        <button 
-                                            onClick={(e) => handleExportSingle(session)} 
-                                            className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                        >
-                                            <Download className="w-3.5 h-3.5" /> 导出 JSON
-                                        </button>
-                                        <div className="h-px bg-slate-100 my-1"></div>
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); requestDelete([session.id]); }} 
-                                            className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" /> 删除
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                          )}
-                      </div>
-                  ))}
+                      ))}
+                  </div>
               </div>
           </div>
       );
@@ -1138,9 +1424,9 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       <ConfirmModal 
           isOpen={deleteModal.isOpen}
           title="确认删除"
-          content={`确定要删除选中的 ${deleteModal.targetIds.length} 个对话吗？此操作无法撤销。`}
+          content={`确定要删除选中的 ${deleteModal.targetIds.length} 项吗？此操作无法撤销。`}
           onConfirm={confirmDelete}
-          onCancel={() => setDeleteModal({isOpen: false, targetIds: []})}
+          onCancel={() => setDeleteModal({...deleteModal, isOpen: false})}
        />
       {/* Notifications */}
       {notification && (
@@ -1246,6 +1532,8 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                                     onInteract={(action, payload, blockIdx) => handleComponentInteract(action, payload, idx, blockIdx)}
                                     // Pass saved component state from the message object down to the renderer
                                     savedState={msg.componentState}
+                                    aiConfig={getEffectiveConfig()}
+                                    availableModels={availableModels}
                                 />
                             </div>
                         ) : (
@@ -1253,6 +1541,8 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                                 content={msg.text} 
                                 onInteract={(action, payload, blockIdx) => handleComponentInteract(action, payload, idx, blockIdx)}
                                 savedState={msg.componentState}
+                                aiConfig={getEffectiveConfig()}
+                                availableModels={availableModels}
                             />
                         )}
                     </div>
@@ -1286,7 +1576,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyPress}
-                placeholder={isConnected ? "输入问题或“出题”..." : "请先配置 API Key"}
+                placeholder={isConnected ? "输入问题、“出题”或“生成试卷”..." : "请先配置 API Key"}
                 className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-2 focus:ring-primary-100 focus:border-primary-500 block p-3 pr-12 transition-all shadow-sm"
                 disabled={isLoading}
             />

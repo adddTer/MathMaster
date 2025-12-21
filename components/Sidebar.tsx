@@ -69,31 +69,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Group topics by category
   const groupedTopics = useMemo(() => {
     const groups: Record<string, Topic[]> = {};
+    const cats: string[] = [];
     topics.forEach(topic => {
       if (!groups[topic.category]) {
         groups[topic.category] = [];
+        cats.push(topic.category);
       }
       groups[topic.category].push(topic);
     });
-    return groups;
+    return { groups, cats };
   }, [topics]);
-
-  // Define the display order of categories manually to ensure logical progression
-  const categoryOrder = [
-    "前置知识", 
-    "第一章 集合",
-    "第二章 常用逻辑用语",
-    "第三章 不等式",
-    "第四章 指数与对数",
-    "第五章 函数概念与性质",
-    "第六章 基本初等函数",
-    "第七章 三角函数",
-    "第八章 函数应用",
-    "第九章 平面向量",
-    "第十章 三角恒等变换",
-    "第十一章 解三角形",
-    "第十二章 复数"
-  ];
 
   return (
     <>
@@ -117,12 +102,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <h1 className="text-xl font-bold text-primary-600 flex items-center gap-2">
             <span>高中数学伴学</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-1">必修第一册 & 衔接课程</p>
+          <p className="text-xs text-slate-400 mt-1">必修课程 & 核心素养</p>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-6">
-          {categoryOrder.map((category) => {
-            const categoryTopics = groupedTopics[category];
+          {groupedTopics.cats.map((category) => {
+            const categoryTopics = groupedTopics.groups[category];
             if (!categoryTopics) return null;
 
             return (
