@@ -228,7 +228,7 @@ export const Chapter14Content = {
                     <span className="font-bold text-slate-800">恩格尔系数 (Engel Coefficient)</span> 已成为衡量一个国家或地区人民生活水平的重要统计指标。
                 </p>
                 <ul className="grid grid-cols-2 gap-2 mt-4 text-xs font-medium text-center">
-                    <li className="bg-red-50 text-red-700 p-2 rounded"> > 60% : 贫穷</li>
+                    <li className="bg-red-50 text-red-700 p-2 rounded"> &gt; 60% : 贫穷</li>
                     <li className="bg-orange-50 text-orange-700 p-2 rounded"> 50% - 60% : 温饱</li>
                     <li className="bg-blue-50 text-blue-700 p-2 rounded"> 40% - 50% : 小康</li>
                     <li className="bg-emerald-50 text-emerald-700 p-2 rounded"> &lt; 30% : 最富裕</li>
