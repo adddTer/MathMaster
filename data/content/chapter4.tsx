@@ -185,7 +185,7 @@ export const Chapter4Content = {
                         <span className="font-bold"><MathFormula tex="x > 0" /></span>
                     </div>
                     <div className="text-center text-amber-600 pt-1 font-bold">
-                        <MathFormula tex="\log_a (x^2) \ne 2\log_a x" /> (除非 x > 0)
+                        <MathFormula tex="\log_a (x^2) \ne 2\log_a x" /> (除非 x &gt; 0)
                     </div>
                     <div className="text-center text-slate-400">
                         正确公式：<MathFormula tex="\log_a (x^2) = 2\log_a |x|" />

@@ -25,7 +25,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: 'npm'
+          # cache: 'npm' # Temporarily disabled because package-lock.json is not in the repo
 
       - name: Install dependencies
         run: npm install
