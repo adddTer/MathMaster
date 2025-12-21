@@ -12,12 +12,9 @@ interface MessageRendererProps {
   onInteract?: (action: string, payload?: any, blockIndex?: number) => void;
   savedState?: Record<number, any>; 
   aiConfig?: any; 
-  availableModels?: any; // Added prop
+  availableModels?: any; 
 }
 
-// Relaxed regex to allow for potential missing newlines before the tag if it's the start of the string
-// Added: chart, complex_plane, solid_geometry, exam_config
-// Fixed: Now captures the preceding newline (^|\n) so it is preserved in split() arrays.
 export const blockRegex = /(^|\n)(:::(?:quiz|keypoint|choice|fill_in|true_false|step_solver|comparison|correction|checklist|tips|suggestions|plot|chart|complex_plane|solid_geometry|exam_config)\s*?\n[\s\S]*?\n:::)(?=\n|$)/g;
 
 // --- Helper Functions & Shared Components ---
@@ -117,14 +114,12 @@ const StandardTextBlock: React.FC<{ content: string }> = ({ content }) => {
   );
 };
 
-// Unified Card Component that standardizes style
 const StyledBlock: React.FC<{
     title: React.ReactNode;
     icon: React.ElementType;
     color: 'blue' | 'indigo' | 'cyan' | 'emerald' | 'slate' | 'orange' | 'red' | 'teal' | 'amber' | 'violet';
     children: React.ReactNode;
 }> = ({ title, icon: Icon, color, children }) => {
-    // Map colors to full Tailwind classes to ensure they are included in build
     const styles = {
         blue: { border: 'border-blue-500', headerBg: 'bg-blue-50/50', iconColor: 'text-blue-600' },
         indigo: { border: 'border-indigo-500', headerBg: 'bg-indigo-50/50', iconColor: 'text-indigo-600' },
@@ -471,15 +466,22 @@ const ChecklistBlock: React.FC<{ content: string; onInteract?: (a:string, p?:any
     const rawJson = content.replace(/^:::checklist\s*/, '').replace(/\s*:::$/, '');
     const { data, error } = safeParseJSON(rawJson);
     if (!data) return <ErrorBlock content={rawJson} errorMsg={error || "Parse error"} onInteract={onInteract} savedState={savedState} />;
+    
+    // Robustly handle if 'items' is an array of objects or strings
+    const items = Array.isArray(data.items) ? data.items : [];
+
     return (
         <StyledBlock title={data.title || "检查清单"} icon={ListChecks} color="teal">
             <div className="space-y-2">
-                {data.items?.map((item: string, idx: number) => (
-                    <div key={idx} className="flex items-start gap-2">
-                        <div className="w-4 h-4 rounded border border-slate-300 bg-white shrink-0 mt-0.5"></div>
-                        <span className="text-sm text-slate-700"><InlineParser content={item} /></span>
-                    </div>
-                ))}
+                {items.map((item: any, idx: number) => {
+                    const text = typeof item === 'string' ? item : (item.text || item.content || JSON.stringify(item));
+                    return (
+                        <div key={idx} className="flex items-start gap-2">
+                            <div className="w-4 h-4 rounded border border-slate-300 bg-white shrink-0 mt-0.5"></div>
+                            <span className="text-sm text-slate-700"><InlineParser content={text} /></span>
+                        </div>
+                    );
+                })}
             </div>
         </StyledBlock>
     );
