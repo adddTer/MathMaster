@@ -96,7 +96,7 @@ const SYSTEM_PROMPT = (context: string) => `
      简单模式:
      :::plot
      {
-       "type": "linear", // 可选: linear, quadratic, cubic, sqrt, inverse, exp_growth, exp_decay, log_growth, log_decay, sin, cos, tan
+       "type": "linear",
        "color": "blue",
        "label": "y=x"
      }
@@ -116,7 +116,7 @@ const SYSTEM_PROMPT = (context: string) => `
      7) **立体几何 (Solid Geometry)** - 用于展示空间图形
      :::solid_geometry
      {
-       "type": "cube", // 可选: cube, tetrahedron, prism, pyramid, cylinder_wire
+       "type": "cube",
        "label": "立方体"
      }
      :::
@@ -162,11 +162,34 @@ const SYSTEM_PROMPT = (context: string) => `
      12) **统计图表 (Chart)**
      :::chart
      {
-       "type": "bar", // 或 line, scatter, histogram
+       "type": "bar",
        "title": "标题",
        "xLabel": "X",
        "yLabel": "Y",
        "data": [{ "label": "A", "value": 10 }]
+     }
+     :::
+
+     13) **检查清单 (Checklist)** - 用于步骤检查或知识点自查
+     :::checklist
+     {
+       "title": "自查清单",
+       "items": ["检查项1", "检查项2"]
+     }
+     :::
+
+     14) **技巧提示 (Tips)** - 用于补充小技巧或记忆口诀
+     :::tips
+     {
+       "title": "技巧",
+       "content": "内容..."
+     }
+     :::
+
+     15) **推荐追问 (Suggestions)** - 用于引导下一轮对话
+     :::suggestions
+     {
+       "items": ["追问1", "追问2"]
      }
      :::
 
