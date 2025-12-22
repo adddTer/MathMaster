@@ -110,23 +110,45 @@ export const EssayWizard: React.FC<EssayWizardProps> = ({ onCancel, onComplete, 
                                 <div className="space-y-6 max-w-lg mx-auto">
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 mb-2">作文题目</label>
-                                        <input type="text" value={config.topic} onChange={e => setConfig({...config, topic: e.target.value})} placeholder="例如：论“变与不变”" className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-200 outline-none bg-white" />
+                                        <input 
+                                            type="text" 
+                                            value={config.topic} 
+                                            onChange={e => setConfig({...config, topic: e.target.value})} 
+                                            placeholder="例如：论“变与不变”" 
+                                            className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-200 outline-none bg-white text-slate-900 placeholder-slate-400 shadow-sm" 
+                                        />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 mb-2">要求/材料</label>
-                                        <textarea value={config.requirements} onChange={e => setConfig({...config, requirements: e.target.value})} placeholder="粘贴作文材料..." className="w-full p-3 h-24 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-200 outline-none resize-none bg-white" />
+                                        <textarea 
+                                            value={config.requirements} 
+                                            onChange={e => setConfig({...config, requirements: e.target.value})} 
+                                            placeholder="粘贴作文材料..." 
+                                            className="w-full p-3 h-24 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-200 outline-none resize-none bg-white text-slate-900 placeholder-slate-400 shadow-sm" 
+                                        />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-bold text-slate-700 mb-2">体裁</label>
-                                            <select value={config.style} onChange={e => setConfig({...config, style: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl outline-none bg-white">
-                                                <option>议论文</option><option>记叙文</option><option>散文</option>
+                                            <select 
+                                                value={config.style} 
+                                                onChange={e => setConfig({...config, style: e.target.value})} 
+                                                className="w-full p-3 border border-slate-200 rounded-xl outline-none bg-white text-slate-900 shadow-sm"
+                                            >
+                                                <option value="议论文">议论文</option>
+                                                <option value="记叙文">记叙文</option>
+                                                <option value="散文">散文</option>
                                             </select>
                                         </div>
                                         <div>
                                             <label className="block text-sm font-bold text-slate-700 mb-2">字数</label>
-                                            <select value={config.wordCount} onChange={e => setConfig({...config, wordCount: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl outline-none bg-white">
-                                                <option value="800">800字</option><option value="1000">1000字</option>
+                                            <select 
+                                                value={config.wordCount} 
+                                                onChange={e => setConfig({...config, wordCount: e.target.value})} 
+                                                className="w-full p-3 border border-slate-200 rounded-xl outline-none bg-white text-slate-900 shadow-sm"
+                                            >
+                                                <option value="800">800字</option>
+                                                <option value="1000">1000字</option>
                                             </select>
                                         </div>
                                     </div>
@@ -136,11 +158,11 @@ export const EssayWizard: React.FC<EssayWizardProps> = ({ onCancel, onComplete, 
                             {phase === 'brainstorm' && (
                                 <div className="grid gap-4">
                                     {brainstormOptions.map((opt, i) => (
-                                        <div key={i} onClick={() => setConfig({...config, selectedAngle: opt.title})} className={`p-5 rounded-xl border-2 cursor-pointer transition-all ${config.selectedAngle === opt.title ? 'border-orange-500 bg-orange-50' : 'border-slate-100 hover:border-orange-200'}`}>
+                                        <div key={i} onClick={() => setConfig({...config, selectedAngle: opt.title})} className={`p-5 rounded-xl border-2 cursor-pointer transition-all ${config.selectedAngle === opt.title ? 'border-orange-500 bg-orange-50' : 'border-slate-100 hover:border-orange-200 bg-white'}`}>
                                             <h3 className="font-bold text-lg text-slate-800 mb-2">{opt.title}</h3>
                                             <p className="text-sm text-slate-600 mb-3">{opt.description}</p>
                                             <div className="flex gap-2">
-                                                {opt.tags?.map((t: string, j: number) => <span key={j} className="text-xs bg-white px-2 py-1 rounded border border-slate-200 text-slate-500">{t}</span>)}
+                                                {opt.tags?.map((t: string, j: number) => <span key={j} className="text-xs bg-slate-50 px-2 py-1 rounded border border-slate-200 text-slate-500">{t}</span>)}
                                             </div>
                                         </div>
                                     ))}
@@ -160,7 +182,7 @@ export const EssayWizard: React.FC<EssayWizardProps> = ({ onCancel, onComplete, 
                                                     setOutlineDraft(newDraft);
                                                     setConfig({...config, outline: newDraft});
                                                 }}
-                                                className="flex-1 p-3 border border-slate-200 rounded-lg text-sm leading-relaxed focus:border-orange-300 outline-none resize-none h-20 bg-white"
+                                                className="flex-1 p-3 border border-slate-200 rounded-lg text-sm leading-relaxed focus:border-orange-300 outline-none resize-none h-20 bg-white text-slate-900 shadow-sm"
                                             />
                                         </div>
                                     ))}
@@ -168,7 +190,7 @@ export const EssayWizard: React.FC<EssayWizardProps> = ({ onCancel, onComplete, 
                                         const newDraft = [...outlineDraft, "新段落..."];
                                         setOutlineDraft(newDraft);
                                         setConfig({...config, outline: newDraft});
-                                    }} className="w-full py-2 border border-dashed border-slate-300 rounded-lg text-slate-400 text-sm hover:bg-slate-50">+ 添加段落</button>
+                                    }} className="w-full py-2 border border-dashed border-slate-300 rounded-lg text-slate-400 text-sm hover:bg-slate-50 bg-white">+ 添加段落</button>
                                 </div>
                             )}
 
@@ -179,7 +201,7 @@ export const EssayWizard: React.FC<EssayWizardProps> = ({ onCancel, onComplete, 
                                             const newSet = new Set(selectedMaterials);
                                             if (newSet.has(i)) newSet.delete(i); else newSet.add(i);
                                             setSelectedMaterials(newSet);
-                                        }} className={`p-4 rounded-xl border cursor-pointer flex items-start gap-3 transition-all ${selectedMaterials.has(i) ? 'border-orange-500 bg-orange-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                        }} className={`p-4 rounded-xl border cursor-pointer flex items-start gap-3 transition-all ${selectedMaterials.has(i) ? 'border-orange-500 bg-orange-50' : 'border-slate-200 hover:bg-slate-50 bg-white'}`}>
                                             <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-0.5 ${selectedMaterials.has(i) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-300 bg-white'}`}>
                                                 {selectedMaterials.has(i) && <Check className="w-3.5 h-3.5" />}
                                             </div>
@@ -198,7 +220,7 @@ export const EssayWizard: React.FC<EssayWizardProps> = ({ onCancel, onComplete, 
                         else if (phase === 'brainstorm') setPhase('setup');
                         else if (phase === 'structure') setPhase('brainstorm');
                         else if (phase === 'materials') setPhase('structure');
-                    }} className="px-6 py-2 rounded-lg text-slate-500 hover:bg-white hover:shadow-sm transition-all font-medium">上一步</button>
+                    }} className="px-6 py-2 rounded-lg text-slate-500 hover:bg-white hover:shadow-sm transition-all font-medium border border-slate-200">上一步</button>
                     
                     <button onClick={handleNext} disabled={isLoading || (phase === 'setup' && !config.topic.trim())} className="px-8 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 shadow-md transition-all font-bold flex items-center gap-2">
                         {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (phase === 'materials' ? '开始写作' : '下一步')} <ArrowRight className="w-4 h-4" />
