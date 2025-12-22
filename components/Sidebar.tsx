@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Topic, SubTopic } from '../types';
-import { ChevronRight, ChevronDown, Quote, BookMarked, Circle, CheckCircle2 } from 'lucide-react';
+import { Topic, SubTopic, SubjectType } from '../types';
+import { ChevronRight, ChevronDown, Quote, BookMarked, Circle, CheckCircle2, Calculator, ScrollText } from 'lucide-react';
 
 interface SidebarProps {
   topics: Topic[];
+  currentSubject: SubjectType;
   currentTopicId: string;
   currentSubTopicId: string;
   onSelectSubTopic: (topicId: string, subTopicId: string) => void;
+  onSwitchSubject: (subject: SubjectType) => void;
   isOpen: boolean;
   onCloseMobile: () => void;
 }
@@ -30,9 +32,11 @@ const QUOTES = [
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
   topics, 
+  currentSubject,
   currentTopicId,
   currentSubTopicId,
   onSelectSubTopic, 
+  onSwitchSubject,
   isOpen,
   onCloseMobile
 }) => {
@@ -99,10 +103,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
         `}
       >
         <div className="p-5 border-b border-slate-100 flex-shrink-0 bg-slate-50/50">
-          <h1 className="text-xl font-bold text-primary-600 flex items-center gap-2">
-            <span>高中数学伴学</span>
+          <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2 mb-4">
+            <span>高中智能伴学</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-1">必修课程 & 核心素养</p>
+          
+          {/* Subject Switcher */}
+          <div className="flex bg-slate-200/50 p-1 rounded-lg">
+              <button 
+                  onClick={() => onSwitchSubject('math')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all ${currentSubject === 'math' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                  <Calculator className="w-3.5 h-3.5" /> 数学
+              </button>
+              <button 
+                  onClick={() => onSwitchSubject('chinese')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all ${currentSubject === 'chinese' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                  <ScrollText className="w-3.5 h-3.5" /> 语文
+              </button>
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-6">

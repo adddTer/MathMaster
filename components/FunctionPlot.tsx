@@ -123,6 +123,24 @@ export const FunctionPlot: React.FC<FunctionPlotProps> = ({
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [mousePos, setMousePos] = useState<{x: number, y: number} | null>(null);
     const plotRef = useRef<HTMLDivElement>(null);
+    
+    // Check for mobile portrait mode to trigger rotation
+    const [isMobilePortrait, setIsMobilePortrait] = useState(false);
+
+    useEffect(() => {
+        if (isFullscreen) {
+            const checkMobile = () => {
+                const isNarrow = window.innerWidth < 768;
+                const isPortrait = window.innerHeight > window.innerWidth;
+                setIsMobilePortrait(isNarrow && isPortrait);
+            };
+            checkMobile();
+            window.addEventListener('resize', checkMobile);
+            return () => window.removeEventListener('resize', checkMobile);
+        } else {
+            setIsMobilePortrait(false);
+        }
+    }, [isFullscreen]);
 
     // Normalize Config
     const config: AdvancedPlotConfig = useMemo(() => {
@@ -261,7 +279,7 @@ export const FunctionPlot: React.FC<FunctionPlotProps> = ({
     
     // Snapping Logic
     const activeState = useMemo(() => {
-        if (!mousePos || !isFullscreen) return null;
+        if (!mousePos || !isFullscreen || isMobilePortrait) return null; // Disable snapping in rotated mobile view for simplicity
         
         const width = window.innerWidth - 300; 
         const height = window.innerHeight;
@@ -304,7 +322,30 @@ export const FunctionPlot: React.FC<FunctionPlotProps> = ({
                 color: f.color
             }))
         };
-    }, [mousePos, isFullscreen, config, variables, intersections]);
+    }, [mousePos, isFullscreen, config, variables, intersections, isMobilePortrait]);
+
+    // Styles for rotated container
+    const rotatedContainerStyle: React.CSSProperties = isMobilePortrait ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vh',
+        height: '100vw',
+        transform: 'rotate(90deg)',
+        transformOrigin: 'top left',
+        marginLeft: '100vw', // Shift to bring back into view after rotation
+        zIndex: 105,
+        background: 'white',
+        overflow: 'hidden'
+    } : {
+        flex: 1,
+        position: 'relative',
+        cursor: 'crosshair',
+        overflow: 'hidden'
+    };
+
+    const plotWidth = isMobilePortrait ? window.innerHeight : (isFullscreen ? window.innerWidth - 300 : 400);
+    const plotHeight = isMobilePortrait ? window.innerWidth : (isFullscreen ? window.innerHeight : 250);
 
     return (
         <>
@@ -312,26 +353,28 @@ export const FunctionPlot: React.FC<FunctionPlotProps> = ({
                 <div className="fixed inset-0 z-[100] bg-white flex text-slate-800 font-sans">
                     {/* Main Plot Area */}
                     <div 
-                        className="flex-1 relative cursor-crosshair overflow-hidden"
+                        style={rotatedContainerStyle}
+                        className={!isMobilePortrait ? "flex-1 relative cursor-crosshair overflow-hidden" : ""}
                         onMouseMove={(e) => {
+                            if (isMobilePortrait) return; // Disable hover on rotated
                             const rect = e.currentTarget.getBoundingClientRect();
                             setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
                         }}
                         onMouseLeave={() => setMousePos(null)}
                     >
                         <div className="absolute inset-0">
-                            {drawPlot(window.innerWidth - 300, window.innerHeight, false)} {/* Light mode */}
+                            {drawPlot(plotWidth, plotHeight, false)}
                         </div>
                         
                         <button 
                             onClick={() => setIsFullscreen(false)}
-                            className="absolute top-4 right-4 p-2 bg-white/80 hover:bg-slate-100 rounded-full text-slate-600 shadow-sm border border-slate-200 transition-colors"
+                            className="absolute top-4 right-4 p-2 bg-white/80 hover:bg-slate-100 rounded-full text-slate-600 shadow-sm border border-slate-200 transition-colors z-20"
                         >
                             <Minimize2 className="w-6 h-6" />
                         </button>
 
-                        {/* Crosshair & Tooltip */}
-                        {activeState && mousePos && (
+                        {/* Crosshair & Tooltip (Disabled on Mobile Rotated View) */}
+                        {activeState && mousePos && !isMobilePortrait && (
                             <>
                                 <div 
                                     className="absolute top-0 bottom-0 w-px bg-slate-400 pointer-events-none border-l border-dashed border-slate-400" 
@@ -385,73 +428,75 @@ export const FunctionPlot: React.FC<FunctionPlotProps> = ({
                         )}
                     </div>
 
-                    {/* Sidebar Controls (Light Theme) */}
-                    <div className="w-[300px] bg-slate-50 border-l border-slate-200 p-6 overflow-y-auto shrink-0 shadow-[-5px_0_15px_-5px_rgba(0,0,0,0.05)]">
-                        <h3 className="font-bold text-lg mb-6 flex items-center gap-2 text-slate-800">
-                            <SlidersHorizontal className="w-5 h-5 text-primary-500" />
-                            参数控制
-                        </h3>
-                        
-                        {config.variables && Object.keys(config.variables).length > 0 ? (
-                            <div className="space-y-8">
-                                {Object.entries(config.variables).map(([key, conf]) => (
-                                    <div key={key}>
-                                        <div className="flex justify-between mb-3 text-sm">
-                                            <span className="font-bold text-slate-700">
-                                                {conf.label || key}
-                                            </span>
-                                            <span className="font-mono text-primary-600 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm min-w-[60px] text-center">
-                                                {key}={variables[key].toFixed(1)}
-                                            </span>
+                    {/* Sidebar Controls (Hidden on Mobile Fullscreen) */}
+                    {!isMobilePortrait && (
+                        <div className="w-[300px] bg-slate-50 border-l border-slate-200 p-6 overflow-y-auto shrink-0 shadow-[-5px_0_15px_-5px_rgba(0,0,0,0.05)]">
+                            <h3 className="font-bold text-lg mb-6 flex items-center gap-2 text-slate-800">
+                                <SlidersHorizontal className="w-5 h-5 text-primary-500" />
+                                参数控制
+                            </h3>
+                            
+                            {config.variables && Object.keys(config.variables).length > 0 ? (
+                                <div className="space-y-8">
+                                    {Object.entries(config.variables).map(([key, conf]) => (
+                                        <div key={key}>
+                                            <div className="flex justify-between mb-3 text-sm">
+                                                <span className="font-bold text-slate-700">
+                                                    {conf.label || key}
+                                                </span>
+                                                <span className="font-mono text-primary-600 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm min-w-[60px] text-center">
+                                                    {key}={variables[key].toFixed(1)}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <button 
+                                                    onClick={() => handleVarChange(key, Math.max(conf.min, variables[key] - (conf.step||0.1)))}
+                                                    className="p-1 rounded hover:bg-slate-200 text-slate-400 transition-colors"
+                                                >
+                                                    <Minus className="w-3 h-3" />
+                                                </button>
+                                                <input 
+                                                    type="range"
+                                                    min={conf.min}
+                                                    max={conf.max}
+                                                    step={conf.step || 0.1}
+                                                    value={variables[key]}
+                                                    onChange={(e) => handleVarChange(key, parseFloat(e.target.value))}
+                                                    className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary-600 min-w-0"
+                                                />
+                                                <button 
+                                                    onClick={() => handleVarChange(key, Math.min(conf.max, variables[key] + (conf.step||0.1)))}
+                                                    className="p-1 rounded hover:bg-slate-200 text-slate-400 transition-colors"
+                                                >
+                                                    <Plus className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                            <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono px-8">
+                                                <span>{conf.min}</span>
+                                                <span>{conf.max}</span>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            <button 
-                                                onClick={() => handleVarChange(key, Math.max(conf.min, variables[key] - (conf.step||0.1)))}
-                                                className="p-1 rounded hover:bg-slate-200 text-slate-400 transition-colors"
-                                            >
-                                                <Minus className="w-3 h-3" />
-                                            </button>
-                                            <input 
-                                                type="range"
-                                                min={conf.min}
-                                                max={conf.max}
-                                                step={conf.step || 0.1}
-                                                value={variables[key]}
-                                                onChange={(e) => handleVarChange(key, parseFloat(e.target.value))}
-                                                className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary-600 min-w-0"
-                                            />
-                                            <button 
-                                                onClick={() => handleVarChange(key, Math.min(conf.max, variables[key] + (conf.step||0.1)))}
-                                                className="p-1 rounded hover:bg-slate-200 text-slate-400 transition-colors"
-                                            >
-                                                <Plus className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                        <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono px-8">
-                                            <span>{conf.min}</span>
-                                            <span>{conf.max}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-slate-400 text-sm text-center py-10 bg-white rounded-xl border border-slate-100 border-dashed">
-                                当前图像无动态参数
-                            </div>
-                        )}
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-slate-400 text-sm text-center py-10 bg-white rounded-xl border border-slate-100 border-dashed">
+                                    当前图像无动态参数
+                                </div>
+                            )}
 
-                        <div className="mt-8 pt-6 border-t border-slate-200">
-                            <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 tracking-wider">当前函数</h4>
-                            <div className="space-y-3">
-                                {config.functions.map((f, i) => (
-                                    <div key={i} className="flex items-center gap-2 text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
-                                        <div className={`w-3 h-3 rounded-full shrink-0 bg-${f.color}-500 ring-2 ring-white shadow-sm`}></div>
-                                        <MathFormula tex={f.label} />
-                                    </div>
-                                ))}
+                            <div className="mt-8 pt-6 border-t border-slate-200">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 tracking-wider">当前函数</h4>
+                                <div className="space-y-3">
+                                    {config.functions.map((f, i) => (
+                                        <div key={i} className="flex items-center gap-2 text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
+                                            <div className={`w-3 h-3 rounded-full shrink-0 bg-${f.color}-500 ring-2 ring-white shadow-sm`}></div>
+                                            <MathFormula tex={f.label} />
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
             

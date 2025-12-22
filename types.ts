@@ -1,10 +1,13 @@
+
 import { ReactNode } from 'react';
+
+export type SubjectType = 'math' | 'chinese';
 
 export interface SubTopic {
   id: string;
   title: string;
   content: ReactNode;
-  tags?: ('hard' | 'important' | 'high-school' | 'extension')[];
+  tags?: ('hard' | 'important' | 'high-school' | 'extension' | 'tool')[];
 }
 
 export interface Topic {
@@ -95,4 +98,46 @@ export interface ExamSession {
   status: 'generating' | 'ready' | 'in_progress' | 'submitted' | 'graded';
   questions: ExamQuestion[];
   currentQuestionIndex: number;
+}
+
+// --- Essay Types ---
+
+export interface EssayConfig {
+    topic: string;
+    requirements: string;
+    wordCount: number | string;
+    style: string;
+    // New fields for structured workflow
+    selectedAngle?: string; // 选定的立意/切入点
+    outline?: string[]; // 大纲结构
+    materials?: string[]; // 选定的素材
+}
+
+export interface EssayAdvisorSuggestion {
+    role: 'logic' | 'rhetoric' | 'history' | 'reality'; // 逻辑, 修辞, 历史, 现实
+    name: string;
+    avatar: string;
+    content: string;
+}
+
+export interface EditorCard {
+    id: string;
+    title: string;
+    tags: string[];
+    content: string; // The draft content to be copied
+    reasoning: string; // Why this direction?
+}
+
+export interface EssaySession {
+    id: string;
+    title: string; // Display title
+    config: EssayConfig;
+    history: {role: 'user'|'model', content: string}[]; // Chat history
+    currentText: string; // The essay being built
+    advisors: EssayAdvisorSuggestion[]; // Current round advisor output
+    cards: EditorCard[]; // Current round suggestions
+    createdAt: number;
+    updatedAt: number;
+    lastModelId?: string;
+    isPinned?: boolean;
 }

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { ExamConfig, ExamSession, ExamQuestion, AIConfig, QuestionBlueprint } from '../types';
 import { generateExamBlueprint, generateExamQuestion, gradeExamQuestion } from '../services/geminiService';
@@ -329,12 +330,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
             let isCorrect = false;
             
             // Normalize answers for comparison
-            const normUser = JSON.stringify(q.userAnswer);
-            const normCorrect = JSON.stringify(q.correctAnswer);
-            
             // Simple string/value comparison
-            // For multiple choice, array order might matter depending on implementation, 
-            // usually sorted or set comparison is better, but stringify works if inputs are stable.
             if (Array.isArray(q.userAnswer) && Array.isArray(q.correctAnswer)) {
                  const u = [...q.userAnswer].sort().join(',');
                  const c = [...q.correctAnswer].sort().join(',');
@@ -345,14 +341,17 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
 
             if (isCorrect) score = q.score;
 
-            const newQuestions = [...exam.questions];
-            newQuestions[index] = {
-                ...q,
-                isGraded: true,
-                obtainedScore: score,
-                feedback: isCorrect ? "回答正确" : "回答错误"
-            };
-            setExam(prev => ({ ...prev, questions: newQuestions }));
+            // Functional Update to avoid race condition
+            setExam(prev => {
+                const newQuestions = [...prev.questions];
+                newQuestions[index] = {
+                    ...newQuestions[index],
+                    isGraded: true,
+                    obtainedScore: score,
+                    feedback: isCorrect ? "回答正确" : "回答错误"
+                };
+                return { ...prev, questions: newQuestions };
+            });
             return;
         }
 
@@ -360,14 +359,18 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
         setGradingLoading(prev => ({ ...prev, [q.id]: true }));
         try {
             const result = await gradeExamQuestion(q, q.userAnswer, aiConfig);
-            const newQuestions = [...exam.questions];
-            newQuestions[index] = {
-                ...q,
-                isGraded: true,
-                obtainedScore: result.score,
-                feedback: result.feedback
-            };
-            setExam(prev => ({ ...prev, questions: newQuestions }));
+            
+            // Functional Update to avoid race condition
+            setExam(prev => {
+                const newQuestions = [...prev.questions];
+                newQuestions[index] = {
+                    ...newQuestions[index],
+                    isGraded: true,
+                    obtainedScore: result.score,
+                    feedback: result.feedback
+                };
+                return { ...prev, questions: newQuestions };
+            });
         } catch (e) {
             console.error(e);
         } finally {
@@ -376,8 +379,12 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
     };
 
     const handleSubmitAll = async () => {
+        // Find indices of questions that need grading
         const ungradedIndices = exam.questions.map((q, i) => (!q.isGraded && q.userAnswer) ? i : -1).filter(i => i !== -1);
         
+        // Process them sequentially to avoid overwhelming rate limits, or parallel if robust
+        // Given we use functional updates now, race conditions in state are handled, 
+        // but we should still be careful about API concurrency.
         for (const idx of ungradedIndices) {
             await handleGradeSingle(idx);
         }
@@ -469,7 +476,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                             onChange={(e) => handleAnswerChange(e.target.value)}
                             disabled={disabled}
                             placeholder="请输入你的答案..."
-                            className="w-full h-32 p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none disabled:bg-slate-50 disabled:text-slate-500"
+                            className="w-full h-32 p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none disabled:bg-slate-50 disabled:text-slate-500 bg-white text-slate-800 shadow-inner"
                         />
                     </div>
                 );
@@ -590,9 +597,11 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                                     <div className="bg-white p-4 rounded-lg border border-slate-100">
                                         <div className="text-xs text-slate-400 font-bold mb-1 uppercase">正确答案</div>
                                         <div className="text-emerald-700 font-bold">
-                                            {Array.isArray(currentQuestion.correctAnswer) 
+                                            <ContentRenderer content={
+                                                Array.isArray(currentQuestion.correctAnswer) 
                                                 ? currentQuestion.correctAnswer.join(", ") 
-                                                : (currentQuestion.correctAnswer === true ? "True" : (currentQuestion.correctAnswer === false ? "False" : String(currentQuestion.correctAnswer)))}
+                                                : (currentQuestion.correctAnswer === true ? "True" : (currentQuestion.correctAnswer === false ? "False" : String(currentQuestion.correctAnswer)))
+                                            } />
                                         </div>
                                     </div>
 

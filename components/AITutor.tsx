@@ -1,14 +1,21 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Bot, User, Sparkles, Loader2, RefreshCw, Settings, Save, AlertCircle, CheckCircle2, XCircle, RefreshCcw, Maximize2, Minimize2, Info, HelpCircle, BookOpen, Construction, BrainCircuit, PenTool, History, Plus, MessageSquare, Trash2, ChevronLeft, Pin, PinOff, Edit2, Download, Upload, MoreHorizontal, Check, X, Square, CheckSquare, MoreVertical, Archive, ListChecks, FileText, Play } from 'lucide-react';
-import { ChatMessage, AIConfig, AIProvider, ChatSession, ExamSession } from '../types';
-import { sendMessageToGeminiStream, fetchOpenAIModels, testGeminiConnection, repairMalformedJson, evaluateQuizAnswer } from '../services/geminiService';
-import { MessageRenderer, blockRegex } from './MessageRenderer';
+import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { ChatMessage, AIConfig, AIProvider, ChatSession, ExamSession, SubjectType } from '../types';
+import { sendMessageToGeminiStream, repairMalformedJson, evaluateQuizAnswer } from '../services/geminiService';
+import { blockRegex } from './MessageRenderer';
 import { ExamRunner } from './ExamComponents';
+import { SettingsView } from './ai-tutor/SettingsView';
+import { HistoryView } from './ai-tutor/HistoryView';
+import { ChatHeader } from './ai-tutor/ChatHeader';
+import { ChatInput } from './ai-tutor/ChatInput';
+import { MessageList } from './ai-tutor/MessageList';
 
 interface AITutorProps {
   currentContext: string;
   initialQuery?: string;
   onClearInitialQuery?: () => void;
+  onNavigate?: (subject: SubjectType, topicId: string, subTopicId: string) => void;
 }
 
 interface ModelOption {
@@ -34,7 +41,6 @@ const DEFAULT_CONFIG: AIConfig = {
 const STORAGE_KEY_SESSIONS = 'math_ai_chat_sessions';
 const STORAGE_KEY_EXAMS = 'math_ai_exams';
 
-// Safer access to process.env to prevent ReferenceError in browser
 const getSystemEnvKey = (): string => {
     try {
         // @ts-ignore
@@ -50,7 +56,6 @@ const getSystemEnvKey = (): string => {
 
 const SYSTEM_ENV_KEY = getSystemEnvKey();
 
-// Helper to generate a new session (defined outside to be used in initial state)
 const createNewSessionHelper = (initialMsg?: ChatMessage[]): ChatSession => {
     return {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
@@ -63,10 +68,8 @@ const createNewSessionHelper = (initialMsg?: ChatMessage[]): ChatSession => {
 
 const sortSessions = (sessions: ChatSession[]): ChatSession[] => {
     return [...sessions].sort((a, b) => {
-        // Pinned sessions first
         if (a.isPinned && !b.isPinned) return -1;
         if (!a.isPinned && b.isPinned) return 1;
-        // Then by date desc
         return b.updatedAt - a.updatedAt;
     });
 };
@@ -94,40 +97,7 @@ const Notification = ({ message, type, onClose }: { message: string, type: 'succ
     );
 };
 
-// Simple Modal Component
-const ConfirmModal = ({ 
-    isOpen, 
-    title, 
-    content, 
-    onConfirm, 
-    onCancel 
-}: { 
-    isOpen: boolean, 
-    title: string, 
-    content: string, 
-    onConfirm: () => void, 
-    onCancel: () => void 
-}) => {
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-lg max-w-sm w-full p-5 animate-in zoom-in-95 duration-200">
-                <h3 className="font-bold text-lg text-slate-800 mb-2">{title}</h3>
-                <p className="text-slate-600 text-sm mb-6">{content}</p>
-                <div className="flex justify-end gap-3">
-                    <button onClick={onCancel} className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 text-sm font-medium">
-                        取消
-                    </button>
-                    <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 text-sm font-medium">
-                        确认删除
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, onClearInitialQuery }) => {
+export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, onClearInitialQuery, onNavigate }) => {
   // --- Sessions State ---
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
       try {
@@ -152,27 +122,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   const [isHistoryView, setIsHistoryView] = useState(false);
   
-  // History View Interaction States
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
-  const [editingExamId, setEditingExamId] = useState<string | null>(null); // For Exam Rename
-  const [editTitleInput, setEditTitleInput] = useState('');
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null); 
-  
-  // Batch Operations State
-  const [isBatchMode, setIsBatchMode] = useState(false);
-  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
-  
-  // Delete Confirmation
-  const [deleteModal, setDeleteModal] = useState<{isOpen: boolean, targetIds: string[], type: 'session' | 'exam'}>({
-      isOpen: false,
-      targetIds: [],
-      type: 'session'
-  });
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const zipInputRef = useRef<HTMLInputElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null); 
-
   // --- Exam State ---
   const [exams, setExams] = useState<ExamSession[]>(() => {
       try {
@@ -194,29 +143,12 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   // --- Config State ---
   const [config, setConfig] = useState<AIConfig>(DEFAULT_CONFIG);
-  const [draftConfig, setDraftConfig] = useState<AIConfig>(DEFAULT_CONFIG); // Temp state for settings menu
   const [hasConfigured, setHasConfigured] = useState(false);
   const [useEnvKey, setUseEnvKey] = useState(false);
   const [availableModels, setAvailableModels] = useState<{gemini: ModelOption[], openai: ModelOption[]}>({
       gemini: DEFAULT_GEMINI_MODELS,
       openai: DEFAULT_OPENAI_MODELS
   });
-  
-  // Test/Fetch State
-  const [isTesting, setIsTesting] = useState(false);
-  const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [testMessage, setTestMessage] = useState('');
-
-  // Close menu on outside click
-  useEffect(() => {
-      const handleClickOutside = (event: MouseEvent) => {
-          if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-              setMenuOpenId(null);
-          }
-      };
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // Save Sessions
   useEffect(() => {
@@ -283,7 +215,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
         console.error("Failed to parse config", e);
       }
     } else {
-        // If no config but ENV KEY present, auto config
         if (SYSTEM_ENV_KEY) {
             setConfig({
                 provider: 'gemini',
@@ -298,38 +229,29 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
     }
   }, []);
 
-  // Sync draft config when opening settings
-  useEffect(() => {
-      if (showSettings) {
-          setDraftConfig(config);
-          setTestStatus('idle');
-      }
-  }, [showSettings, config]);
+  const showNotify = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
+      setNotification({ msg, type });
+  };
 
-  // --- Session Management Handlers ---
+  // --- Handlers passed to sub-components ---
 
-  const currentSession = useMemo(() => {
-      if (sessions.length === 0) return createNewSessionHelper();
-      return sessions.find(s => s.id === currentSessionId) || sessions[0];
-  }, [sessions, currentSessionId]);
+  const handleUpdateModels = (provider: AIProvider, models: ModelOption[]) => {
+      setAvailableModels(prev => ({ ...prev, [provider]: models }));
+      localStorage.setItem('math_ai_custom_models', JSON.stringify(models));
+  };
 
-  const messages = currentSession?.messages || [];
+  const handleConfigSave = (newConfig: AIConfig) => {
+      localStorage.setItem('math_ai_config', JSON.stringify(newConfig));
+      localStorage.setItem('math_ai_debug_mode', String(useEnvKey));
+      setConfig(newConfig);
+      const isConfigured = !!newConfig.apiKey || (useEnvKey && !!SYSTEM_ENV_KEY);
+      setHasConfigured(isConfigured);
+      setShowSettings(false);
+      if (isConfigured) showNotify("配置已保存", 'success');
+  };
 
-  const updateCurrentSessionMessages = (newMessages: ChatMessage[], newTitle?: string) => {
-      setSessions(prev => {
-          const updated = prev.map(s => {
-              if (s.id === (currentSession.id || currentSessionId)) {
-                  return {
-                      ...s,
-                      messages: newMessages,
-                      title: newTitle || s.title,
-                      updatedAt: Date.now()
-                  };
-              }
-              return s;
-          });
-          return sortSessions(updated);
-      });
+  const handleToggleDebugMode = () => {
+      setUseEnvKey(!useEnvKey);
   };
 
   const handleNewChat = () => {
@@ -341,90 +263,47 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       if (inputRef.current) inputRef.current.focus();
   };
 
-  const requestDelete = (ids: string[], type: 'session' | 'exam' = 'session') => {
-      if (ids.length === 0) return;
-      setDeleteModal({
-          isOpen: true,
-          targetIds: ids,
-          type
-      });
-      setMenuOpenId(null);
-  };
-
-  const confirmDelete = () => {
-      const { targetIds, type } = deleteModal;
-      if (targetIds.length === 0) return;
-
+  const handleDelete = (ids: string[], type: 'session' | 'exam') => {
       if (type === 'session') {
-          const newSessions = sessions.filter(s => !targetIds.includes(s.id));
+          const newSessions = sessions.filter(s => !ids.includes(s.id));
           if (newSessions.length === 0) {
               const newSession = createNewSessionHelper();
               setSessions([newSession]);
               setCurrentSessionId(newSession.id);
           } else {
               setSessions(newSessions);
-              if (targetIds.includes(currentSessionId)) {
+              if (ids.includes(currentSessionId)) {
                   setCurrentSessionId(newSessions[0].id);
               }
           }
-          if (isBatchMode) {
-              setSelectedSessionIds(new Set());
-          }
       } else {
-          // Delete Exams
-          setExams(prev => prev.filter(e => !targetIds.includes(e.id)));
+          setExams(prev => prev.filter(e => !ids.includes(e.id)));
       }
-      
-      setDeleteModal({ isOpen: false, targetIds: [], type: 'session' });
-      showNotify(`已删除 ${targetIds.length} 项`, 'success');
+      showNotify(`已删除 ${ids.length} 项`, 'success');
   };
 
-  const handleTogglePin = (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      setMenuOpenId(null); // Ensure menu closes
+  const handleRenameSession = (id: string, newTitle: string) => {
+      setSessions(prev => prev.map(s => s.id === id ? { ...s, title: newTitle } : s));
+  };
+
+  const handleRenameExam = (id: string, newTitle: string) => {
+      let uniqueTitle = newTitle;
+      let count = 1;
+      while (exams.some(ex => ex.id !== id && ex.config.title === uniqueTitle)) {
+          uniqueTitle = `${newTitle} (${count})`;
+          count++;
+      }
+      setExams(prev => prev.map(ex => ex.id === id ? { ...ex, config: { ...ex.config, title: uniqueTitle }} : ex));
+  };
+
+  const handleTogglePin = (id: string) => {
       setSessions(prev => {
           const updated = prev.map(s => s.id === id ? { ...s, isPinned: !s.isPinned } : s);
           return sortSessions(updated);
       });
   };
 
-  const startEditing = (e: React.MouseEvent, id: string, initialTitle: string, type: 'session' | 'exam' = 'session') => {
-      e.stopPropagation();
-      if (type === 'session') {
-          setEditingSessionId(id);
-      } else {
-          setEditingExamId(id);
-      }
-      setEditTitleInput(initialTitle);
-      setMenuOpenId(null);
-  };
-
-  const saveTitle = (e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      if (editingSessionId) {
-          if (editTitleInput.trim()) {
-              setSessions(prev => prev.map(s => s.id === editingSessionId ? { ...s, title: editTitleInput.trim() } : s));
-          }
-          setEditingSessionId(null);
-      } else if (editingExamId) {
-          if (editTitleInput.trim()) {
-              const newTitle = editTitleInput.trim();
-              // Check uniqueness
-              let uniqueTitle = newTitle;
-              let count = 1;
-              // Check against ALL exams except the current one
-              while (exams.some(ex => ex.id !== editingExamId && ex.config.title === uniqueTitle)) {
-                  uniqueTitle = `${newTitle} (${count})`;
-                  count++;
-              }
-              
-              setExams(prev => prev.map(ex => ex.id === editingExamId ? { ...ex, config: { ...ex.config, title: uniqueTitle }} : ex));
-          }
-          setEditingExamId(null);
-      }
-  };
-
-  // --- Import / Export Handlers ---
+  // --- Import / Export Logic (Keep logic here, trigger from HistoryView) ---
 
   const handleExportSingle = (data: ChatSession | ExamSession, type: 'session' | 'exam', title: string) => {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
@@ -434,22 +313,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       document.body.appendChild(downloadAnchorNode);
       downloadAnchorNode.click();
       downloadAnchorNode.remove();
-      setMenuOpenId(null);
-  };
-
-  const handleExportBatch = async () => {
-      const targetIds = Array.from(selectedSessionIds);
-      if (targetIds.length === 0) return;
-      
-      const targetSessions = sessions.filter(s => targetIds.includes(s.id));
-      await generateZipExport(targetSessions);
-      setSelectedSessionIds(new Set());
-      setIsBatchMode(false);
-  };
-
-  const handleExportAll = async () => {
-      await generateZipExport(sessions);
-      setMenuOpenId(null);
   };
 
   const generateZipExport = async (sessionsToExport: ChatSession[]) => {
@@ -467,7 +330,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
               zip.file(`${safeTitle}_${s.id.slice(-4)}.json`, JSON.stringify(s, null, 2));
           });
 
-          // Export Exams to a separate folder in the zip
           if (exams.length > 0) {
               const examsFolder = zip.folder("exams");
               exams.forEach(ex => {
@@ -494,10 +356,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       }
   };
 
-  const handleImportZip = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
+  const handleImportZip = (file: File) => {
       // @ts-ignore
       if (!window.JSZip) {
           showNotify("导入组件未加载，请刷新页面重试", "error");
@@ -518,18 +377,16 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                           try {
                               const json = JSON.parse(content);
                               if (Array.isArray(json.messages)) {
-                                  // It's a ChatSession
                                   newSessions.push({
                                       ...json,
-                                      id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // Renew ID
+                                      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                                       updatedAt: Date.now(),
                                       isPinned: false
                                   });
                               } else if (json.questions && Array.isArray(json.questions)) {
-                                  // It's likely an ExamSession
                                   newExams.push({
                                       ...json,
-                                      id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // Renew ID
+                                      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                                       updatedAt: Date.now()
                                   });
                               }
@@ -558,38 +415,32 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       }).catch((e: any) => {
           showNotify("文件解析失败", "error");
       });
-      
-      if (zipInputRef.current) zipInputRef.current.value = '';
   };
 
-  // --- Batch Operations ---
+  // --- Session Management Handlers ---
 
-  const toggleBatchMode = () => {
-      setIsBatchMode(!isBatchMode);
-      setSelectedSessionIds(new Set());
-      setMenuOpenId(null);
-  };
+  const currentSession = useMemo(() => {
+      if (sessions.length === 0) return createNewSessionHelper();
+      return sessions.find(s => s.id === currentSessionId) || sessions[0];
+  }, [sessions, currentSessionId]);
 
-  const toggleSessionSelect = (id: string) => {
-      const newSet = new Set(selectedSessionIds);
-      if (newSet.has(id)) {
-          newSet.delete(id);
-      } else {
-          newSet.add(id);
-      }
-      setSelectedSessionIds(newSet);
-  };
+  const messages = currentSession?.messages || [];
 
-  const selectAll = () => {
-      if (selectedSessionIds.size === sessions.length) {
-          setSelectedSessionIds(new Set());
-      } else {
-          setSelectedSessionIds(new Set(sessions.map(s => s.id)));
-      }
-  };
-
-  const showNotify = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
-      setNotification({ msg, type });
+  const updateCurrentSessionMessages = (newMessages: ChatMessage[], newTitle?: string) => {
+      setSessions(prev => {
+          const updated = prev.map(s => {
+              if (s.id === (currentSession.id || currentSessionId)) {
+                  return {
+                      ...s,
+                      messages: newMessages,
+                      title: newTitle || s.title,
+                      updatedAt: Date.now()
+                  };
+              }
+              return s;
+          });
+          return sortSessions(updated);
+      });
   };
 
   // Handle Initial Query from props
@@ -603,29 +454,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       }
   }, [initialQuery]);
 
-  // Save Config
-  const handleSaveConfig = () => {
-    localStorage.setItem('math_ai_config', JSON.stringify(draftConfig));
-    localStorage.setItem('math_ai_custom_models', JSON.stringify(availableModels.openai));
-    localStorage.setItem('math_ai_debug_mode', String(useEnvKey));
-    
-    // Commit draft to actual config
-    setConfig(draftConfig);
-
-    const isConfigured = !!draftConfig.apiKey || (useEnvKey && !!SYSTEM_ENV_KEY);
-    setHasConfigured(isConfigured);
-    setShowSettings(false);
-    
-    if (isConfigured) {
-        showNotify("配置已保存", 'success');
-    }
-  };
-
-  const toggleDebugMode = () => {
-      setUseEnvKey(!useEnvKey);
-      setTestStatus('idle');
-  };
-
   // Get effective config for usage (using real config state)
   const getEffectiveConfig = () => {
       if (useEnvKey && SYSTEM_ENV_KEY) {
@@ -638,71 +466,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       return config;
   };
 
-  // For testing in settings, use draft config
-  const getDraftEffectiveConfig = () => {
-      if (useEnvKey && SYSTEM_ENV_KEY) {
-          return {
-              ...draftConfig,
-              apiKey: SYSTEM_ENV_KEY
-          };
-      }
-      return draftConfig;
-  };
-
   const isConnected = !!config.apiKey || (useEnvKey && !!SYSTEM_ENV_KEY);
-
-  const handleProviderChange = (provider: AIProvider) => {
-      const modelList = provider === 'gemini' ? availableModels.gemini : availableModels.openai;
-      const defaultModel = modelList.length > 0 ? modelList[0].id : '';
-      
-      setDraftConfig({
-          ...draftConfig,
-          provider,
-          modelId: defaultModel
-      });
-      setTestStatus('idle');
-  };
-
-  const handleTestAndFetch = async () => {
-      const effectiveTestConfig = getDraftEffectiveConfig();
-
-      if (!effectiveTestConfig.apiKey) {
-          setTestStatus('error');
-          setTestMessage('未找到 API Key');
-          return;
-      }
-      
-      setIsTesting(true);
-      setTestStatus('idle');
-      setTestMessage('');
-
-      try {
-          if (effectiveTestConfig.provider === 'openai') {
-              const models = await fetchOpenAIModels(effectiveTestConfig);
-              if (models.length > 0) {
-                  setAvailableModels(prev => ({ ...prev, openai: models }));
-                  // Update draft config with first model if current is invalid
-                  if (!models.find(m => m.id === effectiveTestConfig.modelId)) {
-                      setDraftConfig(prev => ({ ...prev, modelId: models[0].id }));
-                  }
-                  setTestStatus('success');
-                  setTestMessage(`成功！获取 ${models.length} 个模型`);
-              } else {
-                   setTestStatus('success');
-                   setTestMessage('连接成功，但模型列表为空');
-              }
-          } else {
-              await testGeminiConnection(effectiveTestConfig.apiKey);
-              setTestStatus('success');
-              setTestMessage('连接成功！');
-          }
-      } catch (error: any) {
-          setTestStatus('error');
-          setTestMessage(error.message || '连接失败');
-      } finally {
-          setIsTesting(false);
-      }
-  };
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -821,13 +585,12 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
   };
 
   const getTagFromContent = (str: string) => {
-      const match = str.match(/:::(quiz|keypoint|choice|fill_in|true_false|step_solver|comparison|correction|checklist|tips|suggestions|plot|chart|complex_plane|solid_geometry)/);
+      const match = str.match(/:::(quiz|keypoint|choice|fill_in|true_false|step_solver|comparison|correction|checklist|tips|suggestions|plot|chart|complex_plane|solid_geometry|essay_generator)/);
       return match ? `:::${match[1]}` : ':::';
   };
 
   // Handle Exam Interactions
   const handleExamCreated = (exam: ExamSession) => {
-      // Handle naming collision for new exams
       let newTitle = exam.config.title;
       let count = 1;
       
@@ -848,7 +611,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       setActiveExam(updatedExam);
   };
 
-  const handleComponentInteract = async (action: string, payload?: any, msgIndex?: number, blockIndex?: number) => {
+  const handleComponentInteract = async (action: string, payload?: any, blockIndex?: number, msgIndex?: number) => {
       if (action === 'apply_suggestion') {
           setInput(payload.text);
           if (inputRef.current) {
@@ -857,17 +620,12 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
           return;
       }
 
-      // Launch exam runner & Update state to persist the "Done" view
       if (action === 'start_exam') {
           const incomingExam = payload.exam;
-          
-          // Check if already exists in global store
           const existingExam = exams.find(e => e.id === incomingExam.id);
-          
           let fullExam = existingExam || incomingExam;
           
           if (!existingExam) {
-               // Check if incoming is full (has content)
                if (incomingExam.questions && incomingExam.questions.length > 0 && incomingExam.questions[0].content) {
                    fullExam = handleExamCreated(incomingExam);
                } else {
@@ -879,13 +637,10 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
           }
 
           if (typeof msgIndex === 'number' && typeof blockIndex === 'number') {
-              // Create a lite version for the chat UI to save space and decouple
-              // We keep enough info for the "Done" card to render
               const liteExam = {
                   id: fullExam.id,
                   config: fullExam.config,
                   status: 'done', 
-                  // Mock questions array with correct length for the UI count
                   questions: Array(fullExam.questions.length).fill({}) 
               };
               
@@ -894,6 +649,11 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                   generatedExam: liteExam 
               });
           }
+          return;
+      }
+
+      if (action === 'open_essay_tool') {
+          onNavigate?.('chinese', 'essay-tools', 'ai-essay-generator');
           return;
       }
 
@@ -907,7 +667,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
           handleUpdateMessageState(msgIndex, blockIndex, payload.state);
       }
       
-      // Update state handler specifically for ExamGeneratorBlock persistence
       if (action === 'update_state' && typeof msgIndex === 'number' && typeof blockIndex === 'number') {
           handleUpdateMessageState(msgIndex, blockIndex, payload.state);
       }
@@ -940,13 +699,10 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
                    if (s.id === (currentSession.id || currentSessionId)) {
                        const newMsg = [...s.messages];
                        const msgToFix = newMsg[msgIndex];
-                       // Safe split using the same regex (preserving newlines via capturing group now)
                        const parts = msgToFix.text.split(blockRegex);
                        
                        if (parts[blockIndex]) {
                            const originalTag = getTagFromContent(parts[blockIndex]);
-                           // Replace with corrected block. Newline management handled by surrounding text or regex capture.
-                           // Standard form: \n:::tag\n{json}\n:::\n
                            parts[blockIndex] = `\n${originalTag}\n${fixedJson}\n:::\n`;
                            
                            newMsg[msgIndex] = {
@@ -968,13 +724,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
               handleUpdateMessageState(msgIndex, blockIndex, { isRepairing: false, retryCount: currentRetry + 1 });
           }
       }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
   };
 
   const getCurrentModelName = () => {
@@ -1001,418 +750,45 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       );
   }
 
+  // Settings View
   if (showSettings) {
       return (
-        <div className={containerClass}>
-             <div className="bg-white border-b border-slate-200 p-4 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2 text-slate-800">
-                    <Settings className="w-5 h-5" />
-                    <h2 className="font-semibold text-sm">AI 配置</h2>
-                </div>
-                <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-slate-600">
-                    <span className="text-xs">关闭 (不保存)</span>
-                </button>
-            </div>
-            
-            <div className="flex-1 p-6 overflow-y-auto">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-5 max-w-2xl mx-auto relative">
-                    
-                    {SYSTEM_ENV_KEY && (
-                        <div className="absolute top-5 right-5">
-                            <button 
-                                onClick={toggleDebugMode}
-                                className={`flex items-center gap-2 text-xs font-medium px-2 py-1 rounded-full transition-colors border ${useEnvKey ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-400 border-slate-200'}`}
-                            >
-                                <Construction className="w-3 h-3" />
-                                {useEnvKey ? 'Dev Mode: ON' : 'Dev Mode: OFF'}
-                            </button>
-                        </div>
-                    )}
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">服务商</label>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button 
-                                onClick={() => handleProviderChange('gemini')}
-                                className={`p-3 rounded-lg border text-sm font-medium flex flex-col items-center gap-2 transition-all ${
-                                    draftConfig.provider === 'gemini' 
-                                    ? 'bg-primary-50 border-primary-500 text-primary-700 ring-1 ring-primary-500' 
-                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                                }`}
-                            >
-                                <Sparkles className="w-5 h-5" />
-                                Google Gemini
-                            </button>
-                            <button 
-                                onClick={() => handleProviderChange('openai')}
-                                className={`p-3 rounded-lg border text-sm font-medium flex flex-col items-center gap-2 transition-all ${
-                                    draftConfig.provider === 'openai' 
-                                    ? 'bg-green-50 border-green-500 text-green-700 ring-1 ring-green-500' 
-                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                                }`}
-                            >
-                                <Bot className="w-5 h-5" />
-                                OpenAI
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="text-sm text-slate-500 bg-slate-50 p-4 rounded-xl border border-slate-200 mt-6 leading-relaxed">
-                        <h4 className="font-bold text-slate-700 mb-2">关于试卷功能</h4>
-                        <p className="mb-2">试卷功能正处于测试阶段，AI 出题可能存在格式错误或逻辑偏差，建议人工复核。</p>
-                        <p>请选择具备深度思考能力的模型（如 Pro/Plus 版本），以确保试题质量。</p>
-                    </div>
-
-                    <div className={useEnvKey ? 'opacity-50 pointer-events-none grayscale' : ''}>
-                        <label className="block text-sm font-medium text-slate-700 mb-2 flex justify-between">
-                            <span>API Key</span>
-                            {useEnvKey && <span className="text-amber-600 text-xs font-bold">正在使用系统环境变量 Key</span>}
-                        </label>
-                        <input 
-                            type="password" 
-                            value={useEnvKey ? 'SYSTEM_ENV_KEY_ACTIVE' : draftConfig.apiKey}
-                            onChange={(e) => setDraftConfig({...draftConfig, apiKey: e.target.value})}
-                            placeholder={draftConfig.provider === 'gemini' ? "AIzaSy..." : "sk-..."}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-                            disabled={useEnvKey}
-                        />
-                    </div>
-
-                    {draftConfig.provider === 'openai' && (
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Base URL (可选)</label>
-                            <input 
-                                type="text" 
-                                value={draftConfig.baseUrl || ''}
-                                onChange={(e) => setDraftConfig({...draftConfig, baseUrl: e.target.value})}
-                                placeholder="https://api.openai.com/v1"
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-                            />
-                        </div>
-                    )}
-                    
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={handleTestAndFetch}
-                            disabled={(!draftConfig.apiKey && !useEnvKey) || isTesting}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-                        >
-                            {isTesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
-                            测试连接
-                        </button>
-                        {testStatus !== 'idle' && (
-                            <span className={`text-xs flex items-center gap-1 ${testStatus === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-                                {testStatus === 'success' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                                {testMessage}
-                            </span>
-                        )}
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">选择模型</label>
-                        <div className="relative">
-                            <select 
-                                value={draftConfig.modelId} 
-                                onChange={(e) => setDraftConfig({...draftConfig, modelId: e.target.value})}
-                                disabled={draftConfig.provider === 'openai' && availableModels.openai.length === 0}
-                                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none appearance-none"
-                            >
-                                {(draftConfig.provider === 'gemini' ? availableModels.gemini : availableModels.openai).map(model => (
-                                    <option key={model.id} value={model.id}>{model.name}</option>
-                                ))}
-                                {draftConfig.provider === 'openai' && availableModels.openai.length === 0 && (
-                                    <option disabled>请先配置 Key 并测试连接以加载模型</option>
-                                )}
-                            </select>
-                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-slate-500">
-                                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd"></path></svg>
-                            </div>
-                        </div>
-                    </div>
-
-                    <button 
-                        onClick={handleSaveConfig}
-                        className="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
-                    >
-                        <Save className="w-4 h-4" />
-                        保存配置
-                    </button>
-                </div>
-            </div>
-        </div>
-      )
+          <div className={containerClass}>
+              <SettingsView 
+                  config={config}
+                  onSave={handleConfigSave}
+                  onClose={() => setShowSettings(false)}
+                  availableModels={availableModels}
+                  onUpdateModels={handleUpdateModels}
+                  systemEnvKey={SYSTEM_ENV_KEY}
+                  useEnvKey={useEnvKey}
+                  onToggleDebugMode={handleToggleDebugMode}
+              />
+          </div>
+      );
   }
 
-  // --- History List View ---
+  // History List View
   if (isHistoryView) {
       return (
           <div className={containerClass}>
-               <ConfirmModal 
-                  isOpen={deleteModal.isOpen}
-                  title="确认删除"
-                  content={`确定要删除选中的 ${deleteModal.targetIds.length} 项吗？此操作无法撤销。`}
-                  onConfirm={confirmDelete}
-                  onCancel={() => setDeleteModal({...deleteModal, isOpen: false})}
-               />
-               <input 
-                  type="file" 
-                  ref={zipInputRef} 
-                  className="hidden" 
-                  accept=".zip" 
-                  onChange={handleImportZip}
-               />
-               
-               <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-2 text-slate-800">
-                      <button onClick={() => setIsHistoryView(false)} className="p-1 hover:bg-slate-100 rounded-lg">
-                          <ChevronLeft className="w-5 h-5" />
-                      </button>
-                      <h2 className="font-semibold text-sm">历史对话</h2>
-                  </div>
-                  <div className="flex items-center gap-2">
-                       {/* ... Existing header buttons ... */}
-                       {isBatchMode ? (
-                           <>
-                                <button onClick={selectAll} className="text-slate-500 text-xs font-medium px-2 py-1 hover:bg-slate-100 rounded-lg">
-                                    {selectedSessionIds.size === sessions.length ? '取消全选' : '全选'}
-                                </button>
-                                <button onClick={handleExportBatch} disabled={selectedSessionIds.size === 0} className="text-primary-600 text-xs font-medium flex items-center gap-1 px-2 py-1 hover:bg-primary-50 rounded-lg disabled:opacity-50">
-                                    <Archive className="w-4 h-4" /> 导出
-                                </button>
-                                <button onClick={() => requestDelete(Array.from(selectedSessionIds))} disabled={selectedSessionIds.size === 0} className="text-red-600 text-xs font-medium flex items-center gap-1 px-2 py-1 hover:bg-red-50 rounded-lg disabled:opacity-50">
-                                    <Trash2 className="w-4 h-4" /> 删除
-                                </button>
-                                <button onClick={toggleBatchMode} className="text-slate-500 text-xs font-bold px-2 py-1 hover:bg-slate-100 rounded-lg">
-                                    退出
-                                </button>
-                           </>
-                       ) : (
-                           <>
-                                <button onClick={toggleBatchMode} className="text-slate-500 text-xs font-medium flex items-center gap-1 px-2 py-1 hover:bg-slate-100 rounded-lg transition-colors" title="批量管理">
-                                    <ListChecks className="w-4 h-4" /> 批量
-                                </button>
-                                <div className="h-4 w-px bg-slate-200 mx-1"></div>
-                                <button onClick={() => zipInputRef.current?.click()} className="text-slate-500 text-xs font-medium flex items-center gap-1 px-2 py-1 hover:bg-slate-100 rounded-lg transition-colors" title="导入备份 (ZIP)">
-                                    <Upload className="w-4 h-4" /> 导入
-                                </button>
-                                <button onClick={handleExportAll} className="text-slate-500 text-xs font-medium flex items-center gap-1 px-2 py-1 hover:bg-slate-100 rounded-lg transition-colors" title="一键备份 (ZIP)">
-                                    <Archive className="w-4 h-4" /> 备份
-                                </button>
-                                <button onClick={handleNewChat} className="text-primary-600 text-xs font-bold flex items-center gap-1 px-2 py-1 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors ml-1">
-                                    <Plus className="w-4 h-4" /> 新建
-                                </button>
-                           </>
-                       )}
-                  </div>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-20">
-                  {/* Exams List Section */}
-                  {exams.length > 0 && (
-                      <div className="space-y-2">
-                          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">我的试卷</h3>
-                          {exams.map(exam => {
-                              // Calculate Score if available
-                              const totalScore = exam.questions.reduce((acc, q) => acc + (q.obtainedScore || 0), 0);
-                              const maxScore = exam.questions.reduce((acc, q) => acc + q.score, 0);
-                              const isGraded = exam.status === 'submitted' || exam.status === 'graded';
-
-                              return (
-                              <div 
-                                  key={exam.id}
-                                  className="group p-3 rounded-xl border border-slate-200 bg-white hover:bg-indigo-50 hover:border-indigo-200 transition-all flex items-center justify-between"
-                              >
-                                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                                      <div className={`p-2 rounded-lg shrink-0 ${exam.status === 'submitted' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                                          <FileText className="w-4 h-4" />
-                                      </div>
-                                      <div className="min-w-0 flex-1 relative">
-                                          {editingExamId === exam.id ? (
-                                              <div className="flex items-center gap-2 pr-2" onClick={e => e.stopPropagation()}>
-                                                  <input 
-                                                      type="text" 
-                                                      value={editTitleInput}
-                                                      onChange={e => setEditTitleInput(e.target.value)}
-                                                      onKeyDown={e => e.key === 'Enter' && saveTitle()}
-                                                      className="w-full text-sm border-2 border-primary-500 rounded-md px-2 py-1 bg-white text-slate-900 shadow-sm focus:outline-none"
-                                                      autoFocus
-                                                  />
-                                                  <button onClick={saveTitle} className="p-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 shadow-sm"><Check className="w-3.5 h-3.5" /></button>
-                                                  <button onClick={(e) => { e.stopPropagation(); setEditingExamId(null); }} className="p-1.5 bg-slate-200 text-slate-600 rounded-md hover:bg-slate-300 shadow-sm"><X className="w-3.5 h-3.5" /></button>
-                                              </div>
-                                          ) : (
-                                              <div>
-                                                  <div className="font-medium text-sm text-slate-800 truncate">{exam.config.title}</div>
-                                                  <div className="text-xs text-slate-400 flex items-center gap-2">
-                                                      <span>{new Date(exam.createdAt).toLocaleDateString()}</span>
-                                                      <span>•</span>
-                                                      <span>{exam.questions.length} 题</span>
-                                                      {isGraded && (
-                                                          <>
-                                                            <span>•</span>
-                                                            <span className="font-bold text-emerald-600">{totalScore}/{maxScore} 分</span>
-                                                          </>
-                                                      )}
-                                                  </div>
-                                              </div>
-                                          )}
-                                      </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-2 relative ml-2" ref={menuOpenId === `exam-${exam.id}` ? menuRef : null}>
-                                       <button 
-                                            onClick={() => setActiveExam(exam)}
-                                            className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-lg flex items-center gap-1 text-xs font-bold"
-                                       >
-                                           <Play className="w-3.5 h-3.5" /> 打开
-                                       </button>
-                                       <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setMenuOpenId(menuOpenId === `exam-${exam.id}` ? null : `exam-${exam.id}`);
-                                            }}
-                                            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
-                                       >
-                                            <MoreVertical className="w-4 h-4" />
-                                       </button>
-                                       
-                                       {menuOpenId === `exam-${exam.id}` && (
-                                            <div className="absolute right-0 top-8 w-32 bg-white border border-slate-200 shadow-lg rounded-lg z-20 py-1 flex flex-col animate-in fade-in zoom-in-95 duration-100">
-                                                <button 
-                                                    onClick={(e) => startEditing(e, exam.id, exam.config.title, 'exam')} 
-                                                    className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                                >
-                                                    <Edit2 className="w-3.5 h-3.5" /> 重命名
-                                                </button>
-                                                <button 
-                                                    onClick={(e) => handleExportSingle(exam, 'exam', exam.config.title)} 
-                                                    className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                                >
-                                                    <Download className="w-3.5 h-3.5" /> 导出 JSON
-                                                </button>
-                                                <div className="h-px bg-slate-100 my-1"></div>
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); requestDelete([exam.id], 'exam'); }} 
-                                                    className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" /> 删除
-                                                </button>
-                                            </div>
-                                        )}
-                                  </div>
-                              </div>
-                          )})}
-                      </div>
-                  )}
-
-                  {/* Chat Sessions List Section */}
-                  <div className="space-y-2">
-                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">对话记录</h3>
-                      {sessions.length === 0 && (
-                          <div className="text-center text-slate-400 py-4 text-sm">暂无历史对话</div>
-                      )}
-                      {sessions.map(session => (
-                          <div 
-                              key={session.id} 
-                              onClick={() => {
-                                  if (isBatchMode) {
-                                      toggleSessionSelect(session.id);
-                                  } else {
-                                      setCurrentSessionId(session.id);
-                                      setIsHistoryView(false);
-                                  }
-                              }}
-                              className={`group p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                                  isBatchMode 
-                                    ? (selectedSessionIds.has(session.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200')
-                                    : (session.id === currentSessionId ? 'bg-primary-50 border-primary-200 ring-1 ring-primary-200' : 'bg-white border-slate-200 hover:bg-slate-50 hover:shadow-sm')
-                              }`}
-                          >
-                              {/* ... Existing Session Item Rendering ... */}
-                              <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                  {isBatchMode ? (
-                                      <div className={`shrink-0 ${selectedSessionIds.has(session.id) ? 'text-indigo-600' : 'text-slate-300'}`}>
-                                          {selectedSessionIds.has(session.id) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
-                                      </div>
-                                  ) : (
-                                      <div className={`p-2 rounded-lg shrink-0 ${session.id === currentSessionId ? 'bg-primary-100 text-primary-600' : 'bg-slate-100 text-slate-500'}`}>
-                                          <MessageSquare className="w-4 h-4" />
-                                      </div>
-                                  )}
-                                  
-                                  <div className="min-w-0 flex-1 relative">
-                                      {editingSessionId === session.id ? (
-                                          <div className="flex items-center gap-2 pr-2" onClick={e => e.stopPropagation()}>
-                                              <input 
-                                                  type="text" 
-                                                  value={editTitleInput}
-                                                  onChange={e => setEditTitleInput(e.target.value)}
-                                                  onKeyDown={e => e.key === 'Enter' && saveTitle()}
-                                                  className="w-full text-sm border-2 border-primary-500 rounded-md px-2 py-1 bg-white text-slate-900 shadow-sm focus:outline-none"
-                                                  autoFocus
-                                              />
-                                              <button onClick={saveTitle} className="p-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 shadow-sm"><Check className="w-3.5 h-3.5" /></button>
-                                              <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(null); }} className="p-1.5 bg-slate-200 text-slate-600 rounded-md hover:bg-slate-300 shadow-sm"><X className="w-3.5 h-3.5" /></button>
-                                          </div>
-                                      ) : (
-                                          <>
-                                              <div className={`font-medium text-sm truncate flex items-center gap-1.5 ${session.id === currentSessionId ? 'text-primary-900' : 'text-slate-700'}`}>
-                                                  {session.isPinned && <Pin className="w-3 h-3 fill-slate-400 text-slate-400 rotate-45" />}
-                                                  {session.title}
-                                              </div>
-                                              <div className="text-xs text-slate-400">{new Date(session.updatedAt).toLocaleString()}</div>
-                                          </>
-                                      )}
-                                  </div>
-                              </div>
-                              
-                              {!isBatchMode && (
-                                <div className="relative ml-2" ref={menuOpenId === session.id ? menuRef : null}>
-                                    <button 
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setMenuOpenId(menuOpenId === session.id ? null : session.id);
-                                        }}
-                                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
-                                    >
-                                        <MoreVertical className="w-4 h-4" />
-                                    </button>
-                                    
-                                    {menuOpenId === session.id && (
-                                        <div className="absolute right-0 top-8 w-32 bg-white border border-slate-200 shadow-lg rounded-lg z-20 py-1 flex flex-col animate-in fade-in zoom-in-95 duration-100">
-                                            <button 
-                                                onClick={(e) => handleTogglePin(e, session.id)} 
-                                                className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                            >
-                                                {session.isPinned ? <><PinOff className="w-3.5 h-3.5" /> 取消置顶</> : <><Pin className="w-3.5 h-3.5" /> 置顶</>}
-                                            </button>
-                                            <button 
-                                                onClick={(e) => startEditing(e, session.id, session.title, 'session')} 
-                                                className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                            >
-                                                <Edit2 className="w-3.5 h-3.5" /> 重命名
-                                            </button>
-                                            <button 
-                                                onClick={(e) => handleExportSingle(session, 'session', session.title)} 
-                                                className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                            >
-                                                <Download className="w-3.5 h-3.5" /> 导出 JSON
-                                            </button>
-                                            <div className="h-px bg-slate-100 my-1"></div>
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); requestDelete([session.id], 'session'); }} 
-                                                className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" /> 删除
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                              )}
-                          </div>
-                      ))}
-                  </div>
-              </div>
+              <HistoryView 
+                  sessions={sessions}
+                  exams={exams}
+                  currentSessionId={currentSessionId}
+                  onSelectSession={(id) => { setCurrentSessionId(id); setIsHistoryView(false); }}
+                  onSelectExam={(ex) => setActiveExam(ex)}
+                  onClose={() => setIsHistoryView(false)}
+                  onNewChat={handleNewChat}
+                  onImportZip={handleImportZip}
+                  onExportAll={() => generateZipExport(sessions)}
+                  onExportBatch={(ids) => generateZipExport(sessions.filter(s => ids.includes(s.id)))}
+                  onExportSingle={handleExportSingle}
+                  onDelete={handleDelete}
+                  onRenameSession={handleRenameSession}
+                  onRenameExam={handleRenameExam}
+                  onTogglePin={handleTogglePin}
+              />
           </div>
       );
   }
@@ -1421,13 +797,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   return (
     <div className={containerClass}>
-      <ConfirmModal 
-          isOpen={deleteModal.isOpen}
-          title="确认删除"
-          content={`确定要删除选中的 ${deleteModal.targetIds.length} 项吗？此操作无法撤销。`}
-          onConfirm={confirmDelete}
-          onCancel={() => setDeleteModal({...deleteModal, isOpen: false})}
-       />
       {/* Notifications */}
       {notification && (
           <Notification 
@@ -1437,159 +806,35 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
           />
       )}
 
-      {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0 z-10">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="bg-primary-50 p-1.5 rounded-lg text-primary-600 shrink-0">
-             <Bot className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-              <h2 className="font-semibold text-sm text-slate-800 truncate">{currentSession?.title}</h2>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-slate-300'}`}></span>
-                <span className="text-[10px] text-slate-500 truncate max-w-[150px]">
-                    {isConnected ? getCurrentModelName() : '未连接'}
-                </span>
-              </div>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-1 shrink-0">
-            <button 
-                onClick={() => setIsHistoryView(true)}
-                className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
-                title="历史对话"
-            >
-                <History className="w-4 h-4" />
-            </button>
-            <button 
-                onClick={handleNewChat}
-                className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors hidden sm:flex"
-                title="新对话"
-            >
-                <Plus className="w-4 h-4" />
-            </button>
+      <ChatHeader 
+          title={currentSession?.title}
+          modelName={getCurrentModelName()}
+          isConnected={isConnected}
+          onHistoryClick={() => setIsHistoryView(true)}
+          onNewChatClick={handleNewChat}
+          onFullscreenClick={() => setIsFullscreen(!isFullscreen)}
+          isFullscreen={isFullscreen}
+          onSettingsClick={() => setShowSettings(true)}
+      />
 
-            <button 
-                onClick={() => setIsFullscreen(!isFullscreen)}
-                className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors hidden md:flex"
-                title={isFullscreen ? "退出全屏" : "全屏模式"}
-            >
-                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
+      <MessageList 
+          messages={messages}
+          isLoading={isLoading}
+          isFullscreen={isFullscreen}
+          scrollRef={scrollRef}
+          onInteract={handleComponentInteract}
+          aiConfig={getEffectiveConfig()}
+          availableModels={availableModels}
+      />
 
-            <button 
-                onClick={() => setShowSettings(true)}
-                className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
-                title="API 设置"
-            >
-                <Settings className="w-4 h-4" />
-            </button>
-        </div>
-      </div>
-
-      {/* Messages Area */}
-      <div 
-        ref={scrollRef}
-        className={`flex-1 overflow-y-auto ${isFullscreen ? 'bg-white' : 'bg-slate-50'} p-4`}
-      >
-        <div className={`mx-auto space-y-6 ${isFullscreen ? 'max-w-3xl' : 'max-w-none'}`}>
-            {messages.map((msg, idx) => {
-              // Hide the empty placeholder message bubble if we are showing the skeleton
-              if (isLoading && idx === messages.length - 1 && msg.role === 'model' && !msg.text) {
-                  return null;
-              }
-
-              return (
-                <div 
-                    key={idx} 
-                    className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : 'items-start'}`}
-                >
-                    {/* Avatar */}
-                    <div className={`
-                        w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1
-                        ${msg.role === 'model' ? 'bg-indigo-50 text-indigo-600' : 'bg-blue-600 text-white'}
-                    `}>
-                        {msg.role === 'model' ? <Sparkles className="w-4 h-4" /> : <User className="w-4 h-4" />}
-                    </div>
-
-                    {/* Bubble */}
-                    <div className={`
-                        min-w-0 
-                        ${isFullscreen && msg.role === 'model' ? 'w-full' : 'max-w-[85%] rounded-2xl p-4 shadow-sm'}
-                        ${msg.role === 'user' 
-                            ? 'bg-blue-600 text-white rounded-tr-sm' 
-                            : isFullscreen 
-                                ? 'text-slate-800 pt-1' // Fullscreen model style: document-like
-                                : 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm' // Normal model style: bubble
-                        }
-                        ${msg.isError ? 'border-red-300 bg-red-50 text-red-600' : ''}
-                    `}>
-                        {isFullscreen && msg.role === 'model' ? (
-                            <div className="prose prose-slate max-w-none prose-p:leading-relaxed prose-headings:font-bold prose-headings:text-slate-800">
-                                <MessageRenderer 
-                                    content={msg.text} 
-                                    onInteract={(action, payload, blockIdx) => handleComponentInteract(action, payload, idx, blockIdx)}
-                                    // Pass saved component state from the message object down to the renderer
-                                    savedState={msg.componentState}
-                                    aiConfig={getEffectiveConfig()}
-                                    availableModels={availableModels}
-                                />
-                            </div>
-                        ) : (
-                            <MessageRenderer 
-                                content={msg.text} 
-                                onInteract={(action, payload, blockIdx) => handleComponentInteract(action, payload, idx, blockIdx)}
-                                savedState={msg.componentState}
-                                aiConfig={getEffectiveConfig()}
-                                availableModels={availableModels}
-                            />
-                        )}
-                    </div>
-                </div>
-              );
-            })}
-
-            {/* Loading Skeleton - Show only when initially loading before first chunk */}
-            {isLoading && messages.length > 0 && messages[messages.length-1].role === 'model' && messages[messages.length-1].text === '' && (
-                 <div className="flex gap-4 items-start animate-pulse">
-                     <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center shrink-0 mt-1">
-                        <Loader2 className="w-4 h-4 text-indigo-300 animate-spin" />
-                     </div>
-                     <div className={`${isFullscreen ? 'w-full' : 'max-w-[85%] w-full bg-white border border-slate-200 rounded-2xl rounded-tl-sm p-4'}`}>
-                        <div className="h-4 bg-slate-200 rounded w-3/4 mb-3"></div>
-                        <div className="h-4 bg-slate-200 rounded w-1/2 mb-3"></div>
-                        <div className="h-4 bg-slate-200 rounded w-5/6"></div>
-                     </div>
-                 </div>
-            )}
-        </div>
-      </div>
-
-      {/* Input Area */}
-      <div className={`shrink-0 border-t border-slate-200 ${isFullscreen ? 'bg-white' : 'bg-white'} p-4`}>
-        <div className={`mx-auto ${isFullscreen ? 'max-w-3xl' : 'max-w-none'}`}>
-            <div className="relative flex items-center gap-2">
-            <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyPress}
-                placeholder={isConnected ? "输入问题、“出题”或“生成试卷”..." : "请先配置 API Key"}
-                className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-2 focus:ring-primary-100 focus:border-primary-500 block p-3 pr-12 transition-all shadow-sm"
-                disabled={isLoading}
-            />
-            <button 
-                onClick={() => handleSend()}
-                disabled={!input.trim() || isLoading}
-                className="absolute right-2 p-1.5 bg-primary-600 text-white hover:bg-primary-700 rounded-lg transition-colors disabled:opacity-50 disabled:bg-transparent disabled:text-slate-400"
-            >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            </button>
-            </div>
-        </div>
-      </div>
+      <ChatInput 
+          input={input}
+          setInput={setInput}
+          onSend={() => handleSend()}
+          isLoading={isLoading}
+          isConnected={isConnected}
+          inputRef={inputRef}
+      />
     </div>
   );
 };
