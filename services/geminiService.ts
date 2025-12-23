@@ -195,16 +195,17 @@ export const sendMessageToGeminiStream = async (
   currentContext: string,
   userMessage: string,
   config: AIConfig,
-  onChunk: (text: string) => void
+  onChunk: (text: string) => void,
+  sysPromptOverride?: string // Added optional parameter
 ): Promise<string> => {
   if (!config || !config.apiKey) {
     throw new Error("请先配置 API Key");
   }
 
   if (config.provider === 'openai') {
-    return callOpenAIStream(config, history, currentContext, userMessage, onChunk);
+    return callOpenAIStream(config, history, currentContext, userMessage, onChunk, sysPromptOverride);
   } else {
-    return callGeminiStream(config, history, currentContext, userMessage, onChunk);
+    return callGeminiStream(config, history, currentContext, userMessage, onChunk, sysPromptOverride);
   }
 };
 

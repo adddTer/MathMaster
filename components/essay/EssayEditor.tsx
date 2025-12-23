@@ -1,10 +1,9 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, Clock, FileText, Trash2, ArrowRight, Upload, Archive, CheckSquare, Square, MoreVertical, Edit2, Download, Pin, PinOff, Search } from 'lucide-react';
-import { AIConfig, EssayConfig, EssaySession, AIProvider } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { Plus, ArrowRight, Upload, Archive, CheckSquare, Square, MoreVertical, Edit2, Download, Pin, PinOff, Search, Sparkles } from 'lucide-react';
+import { AIConfig, EssaySession, AIProvider } from '../../types';
 import { EssayWorkspace } from './EssayWorkspace';
 import { SettingsView } from '../ai-tutor/SettingsView';
-import { EssayWizard } from './EssayWizard';
 import { EssayList } from './EssayList';
 
 interface ModelOption {
@@ -42,8 +41,11 @@ export const EssayEditor: React.FC<EssayEditorProps> = ({
     });
     
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-    const [view, setView] = useState<'list' | 'wizard' | 'workspace'>('list');
+    const [view, setView] = useState<'list' | 'input' | 'workspace'>('list');
     const [showSettings, setShowSettings] = useState(false);
+    
+    // New Session Input State
+    const [newMaterial, setNewMaterial] = useState('');
     
     const [selectedModelId, setSelectedModelId] = useState(aiConfig.modelId || '');
 
@@ -73,24 +75,42 @@ export const EssayEditor: React.FC<EssayEditorProps> = ({
         return { ...aiConfig, modelId: selectedModelId };
     };
 
-    const handleCreateSession = (config: EssayConfig) => {
+    const handleCreateSession = () => {
+        if (!newMaterial.trim()) return;
+
+        // Auto-generate a temporary title, AI will refine it later
+        const title = newMaterial.length > 15 ? newMaterial.slice(0, 15) + '...' : newMaterial;
+        
         const newSession: EssaySession = {
             id: Date.now().toString(),
-            title: config.topic,
-            config: config,
-            history: [{ role: 'model', content: `主编您好，写作项目“${config.topic}”已启动。\n\n**立意**：${config.selectedAngle}\n**大纲**：已就绪\n**素材**：已准备${config.materials?.length}条\n\n顾问团已就位，请下达第一条写作指令。` }],
+            title: title,
+            config: {
+                topic: newMaterial, // Store material here
+                requirements: "", 
+                wordCount: 800, 
+            },
+            history: [
+                { 
+                    role: 'user', 
+                    text: newMaterial,
+                }
+            ],
             currentText: '',
             advisors: [],
             cards: [],
             createdAt: Date.now(),
             updatedAt: Date.now(),
             lastModelId: selectedModelId,
-            isPinned: false
+            isPinned: false,
+            mode: 'proxy', // Default to User Proxy mode
+            groupState: 'analyzing',
+            subState: 'discussion' // Start in discussion mode
         };
         
         setSessions(prev => [newSession, ...prev]);
         setCurrentSessionId(newSession.id);
         setView('workspace');
+        setNewMaterial('');
     };
 
     const handleOpenSession = (id: string) => {
@@ -197,13 +217,51 @@ export const EssayEditor: React.FC<EssayEditorProps> = ({
         );
     }
 
-    if (view === 'wizard') {
+    if (view === 'input') {
         return (
-            <EssayWizard 
-                onCancel={() => setView('list')}
-                onComplete={handleCreateSession}
-                aiConfig={getEffectiveConfig()}
-            />
+            <div className="flex flex-col h-full bg-slate-50 p-4 md:p-8 overflow-y-auto items-center justify-center">
+                <div className="max-w-3xl w-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+                    <div className="p-10">
+                        <div className="flex items-center gap-3 mb-6 justify-center">
+                            <div className="p-3 bg-orange-100 text-orange-600 rounded-full">
+                                <Sparkles className="w-8 h-8" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-800">提交写作材料</h2>
+                        </div>
+                        
+                        <p className="text-slate-500 mb-6 text-center text-base leading-relaxed">
+                            请粘贴作文题目或材料。不需要指定文体或字数，<br/>AI 顾问团将深入解读材料，并在您的指挥下完成创作。
+                        </p>
+
+                        <textarea
+                            value={newMaterial}
+                            onChange={(e) => setNewMaterial(e.target.value)}
+                            placeholder="例如：
+阅读下面的材料，根据要求写作。
+...材料内容...
+"
+                            className="w-full h-64 p-5 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-100 focus:border-orange-300 outline-none resize-none bg-slate-50 text-slate-800 mb-8 text-base shadow-inner transition-all"
+                            autoFocus
+                        />
+
+                        <div className="flex gap-4">
+                            <button 
+                                onClick={() => setView('list')}
+                                className="px-8 py-3.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors bg-white text-base"
+                            >
+                                取消
+                            </button>
+                            <button 
+                                onClick={handleCreateSession}
+                                disabled={!newMaterial.trim()}
+                                className="flex-1 px-8 py-3.5 rounded-xl bg-orange-600 text-white font-bold hover:bg-orange-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex items-center justify-center gap-2 text-base"
+                            >
+                                召集顾问团 <ArrowRight className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         );
     }
 
@@ -211,7 +269,7 @@ export const EssayEditor: React.FC<EssayEditorProps> = ({
         return (
             <EssayWorkspace 
                 session={currentSession}
-                aiConfig={aiConfig}
+                aiConfig={getEffectiveConfig()}
                 availableModels={currentModelList}
                 selectedModelId={selectedModelId}
                 onBack={() => setView('list')}
@@ -225,7 +283,7 @@ export const EssayEditor: React.FC<EssayEditorProps> = ({
     return (
         <EssayList 
             sessions={sessions}
-            onNew={() => setView('wizard')}
+            onNew={() => setView('input')}
             onSelect={handleOpenSession}
             onDelete={(ids) => deleteSessions(ids)}
             onRename={handleRename}

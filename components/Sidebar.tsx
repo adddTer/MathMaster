@@ -27,7 +27,7 @@ const SUBJECT_CONFIG: Record<SubjectType, { label: string, color: string, icon: 
 
 // Define available modules (Books) for each subject
 const MODULES: Record<SubjectType, string[]> = {
-    math: ['全部', '必修第一册', '必修第二册', '选择性必修'],
+    math: ['全部', '前置知识', '必修第一册', '必修第二册', '选择性必修'],
     chinese: ['全部', '必修上册', '必修下册'],
     english: ['全部', '必修一', '必修二', '必修三'],
     physics: ['全部', '必修一', '必修二', '必修三'],
@@ -35,18 +35,33 @@ const MODULES: Record<SubjectType, string[]> = {
     biology: ['全部', '必修一', '必修二'],
 };
 
-// Helper to map categories to Math books (Approximate based on standard curriculum)
+// Helper: Convert Chinese numerals to number for chapter parsing
+const chineseToNumber = (str: string): number => {
+    const map: Record<string, number> = {
+        '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+        '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+        '十一': 11, '十二': 12, '十三': 13, '十四': 14, '十五': 15
+    };
+    // Match "第X章" pattern
+    const match = str.match(/第([一二三四五六七八九十]+)章/);
+    if (match && map[match[1]]) return map[match[1]];
+    return 0;
+};
+
+// Helper to map categories to Math books
 const getMathModule = (category: string): string => {
-    if (category.includes('前置') || category.includes('集合') || category.includes('逻辑') || category.includes('不等式') || category.includes('指数') || category.includes('函数概念')) {
-        return '必修第一册';
-    }
-    if (category.includes('基本初等') || category.includes('三角') || category.includes('向量') || category.includes('恒等变换') || category.includes('函数应用')) {
-        return '必修第二册';
-    }
-    // Chapters 11-15 usually fall into selective or later books
-    if (category.includes('解三角形') || category.includes('复数') || category.includes('立体') || category.includes('统计') || category.includes('概率')) {
+    if (category.includes('前置')) return '前置知识';
+    
+    const chapterNum = chineseToNumber(category);
+    if (chapterNum > 0) {
+        if (chapterNum <= 8) return '必修第一册'; // Ch 1-8
+        if (chapterNum <= 15) return '必修第二册'; // Ch 9-15
         return '选择性必修';
     }
+    
+    // Fallback for named categories if any
+    if (category.includes('集合') || category.includes('函数')) return '必修第一册';
+    
     return '其他';
 };
 
@@ -217,18 +232,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 const categoryTopics = groupedTopics.groups[category];
                 if (!categoryTopics) return null;
 
+                // Smart Merging: If a category has only one topic, and (it's a Chapter OR name contains topic), we merge.
+                // This handles "第六章 基本初等函数" (Category) vs "幂指对函数" (Topic) by matching "第" prefix.
+                const singleTopic = categoryTopics.length === 1 ? categoryTopics[0] : null;
+                const isRedundant = singleTopic && (category.includes(singleTopic.title) || category.startsWith('第'));
+
                 return (
                   <div key={category} className="space-y-2 animate-in fade-in slide-in-from-left-4 duration-300">
-                    <div className="px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <div className="h-px bg-slate-200 flex-1"></div>
-                      <span className="flex items-center gap-1.5"><BookMarked className="w-3 h-3" /> {category}</span>
-                      <div className="h-px bg-slate-200 flex-1"></div>
-                    </div>
+                    {!isRedundant && (
+                        <div className="px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <div className="h-px bg-slate-200 flex-1"></div>
+                            <span className="flex items-center gap-1.5"><BookMarked className="w-3 h-3" /> {category}</span>
+                            <div className="h-px bg-slate-200 flex-1"></div>
+                        </div>
+                    )}
                     
                     <div className="space-y-1">
                     {categoryTopics.map((topic) => {
                       const isExpanded = expandedTopicIds.has(topic.id);
                       const isTopicActive = currentTopicId === topic.id;
+                      // If merged, use the Category Name (e.g. "第六章 基本初等函数") as the button title
+                      const displayTitle = (isRedundant && singleTopic?.id === topic.id) ? category : topic.title;
 
                       return (
                         <div key={topic.id} className={`rounded-xl overflow-hidden transition-all ${isTopicActive ? 'bg-white shadow-sm border border-slate-100' : ''}`}>
@@ -245,7 +269,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             <div className={`p-1.5 rounded-md shrink-0 transition-colors ${isTopicActive ? 'bg-primary-50 text-primary-600' : 'bg-slate-100 text-slate-400'}`}>
                                 {React.cloneElement(topic.icon as React.ReactElement<any>, { className: "w-4 h-4" })}
                             </div>
-                            <span className="flex-1 text-sm font-bold truncate">{topic.title}</span>
+                            <span className="flex-1 text-sm font-bold truncate">{displayTitle}</span>
                             {isExpanded ? (
                                  <ChevronDown className={`w-3.5 h-3.5 shrink-0 ${isTopicActive ? 'text-primary-400' : 'text-slate-300'}`} />
                             ) : (

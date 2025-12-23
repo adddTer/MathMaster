@@ -1,9 +1,11 @@
+
 import React from 'react';
 import { blockRegex, StandardTextBlock } from './blocks/utils';
 import { ChoiceBlock, FillInBlock, TrueFalseBlock, QuizBlock } from './blocks/QuestionBlocks';
 import { KeypointBlock, StepSolverBlock, ComparisonBlock, CorrectionBlock, ChecklistBlock, TipsBlock, SuggestionsBlock } from './blocks/ContentBlocks';
 import { PlotBlock, ChartBlock, ComplexBlock, GeometryBlock } from './blocks/VisualBlocks';
 import { ExamConfigBlock, EssayGeneratorBlock } from './blocks/ToolBlocks';
+import { EssayDecisionBlock } from './blocks/EssayBlocks';
 
 interface MessageRendererProps {
   content: string;
@@ -46,6 +48,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({ content, onInt
         // Tool Blocks
         if (part.startsWith(':::exam_config')) return <ExamConfigBlock key={compKey} content={part} onInteract={interact} savedState={blockState} aiConfig={aiConfig} availableModels={availableModels} />;
         if (part.startsWith(':::essay_generator')) return <EssayGeneratorBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
+        if (part.startsWith(':::essay_decisions')) return <EssayDecisionBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
         
         if (part.trim() === '' && part !== '\n') return null;
         return <StandardTextBlock key={compKey} content={part} />;

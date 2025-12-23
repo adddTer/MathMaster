@@ -24,6 +24,13 @@ export interface ChatMessage {
   text: string;
   isError?: boolean;
   componentState?: Record<number, any>; 
+  // Multi-agent support
+  sender?: {
+    name: string;
+    avatar?: string;
+    role?: 'admin' | 'logic' | 'rhetoric' | 'history' | 'reality';
+    color?: string;
+  };
 }
 
 export interface ChatSession {
@@ -103,18 +110,18 @@ export interface ExamSession {
 // --- Essay Types ---
 
 export interface EssayConfig {
-    topic: string;
-    requirements: string;
-    wordCount: number | string;
-    style: string;
+    topic: string; // Material or Topic
+    requirements?: string; // Now optional or merged
+    wordCount?: number | string;
+    style?: string;
     // New fields for structured workflow
-    selectedAngle?: string; // 选定的立意/切入点
-    outline?: string[]; // 大纲结构
-    materials?: string[]; // 选定的素材
+    selectedAngle?: string; 
+    outline?: string[]; 
+    materials?: string[]; 
 }
 
 export interface EssayAdvisorSuggestion {
-    role: 'logic' | 'rhetoric' | 'history' | 'reality'; // 逻辑, 修辞, 历史, 现实
+    role: 'logic' | 'rhetoric' | 'history' | 'reality'; 
     name: string;
     avatar: string;
     content: string;
@@ -124,20 +131,24 @@ export interface EditorCard {
     id: string;
     title: string;
     tags: string[];
-    content: string; // The draft content to be copied
-    reasoning: string; // Why this direction?
+    content: string; 
+    reasoning: string; 
 }
 
 export interface EssaySession {
     id: string;
-    title: string; // Display title
+    title: string; 
     config: EssayConfig;
-    history: {role: 'user'|'model', content: string}[]; // Chat history
-    currentText: string; // The essay being built
-    advisors: EssayAdvisorSuggestion[]; // Current round advisor output
-    cards: EditorCard[]; // Current round suggestions
+    history: ChatMessage[]; 
+    currentText: string; 
+    advisors: EssayAdvisorSuggestion[]; 
+    cards: EditorCard[]; 
     createdAt: number;
     updatedAt: number;
     lastModelId?: string;
     isPinned?: boolean;
+    // Core Workflow State
+    mode: 'auto' | 'proxy'; 
+    groupState: 'analyzing' | 'discussing' | 'writing' | 'reviewing'; // Phases
+    subState?: 'discussion' | 'decision' | 'approval'; // Internal flow within a phase
 }
