@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 import { ChatMessage, AIConfig, ExamConfig, ExamQuestion, QuestionBlueprint } from '../types';
 import { 
@@ -8,6 +9,16 @@ import {
     GENERATOR_PROMPT, 
     GRADER_PROMPT 
 } from './prompts';
+
+// Helper to sanitize error messages
+const sanitizeError = (error: any): string => {
+    let msg = error.message || '未知错误';
+    // Replace specific provider names with generic terms to avoid confusion
+    msg = msg.replace(/OpenAI/gi, 'AI Service');
+    msg = msg.replace(/Gemini/gi, 'AI Service');
+    msg = msg.replace(/Google/gi, 'Provider');
+    return msg;
+};
 
 // Test Gemini Connection
 export const testGeminiConnection = async (apiKey: string): Promise<boolean> => {
@@ -20,9 +31,9 @@ export const testGeminiConnection = async (apiKey: string): Promise<boolean> => 
             config: { maxOutputTokens: 1 }
         });
         return true;
-    } catch (error) {
-        console.error("Gemini Connection Test Failed:", error);
-        throw error;
+    } catch (error: any) {
+        console.error("Connection Test Failed:", error);
+        throw new Error(`连接验证失败: ${sanitizeError(error)}`);
     }
 };
 
@@ -40,7 +51,9 @@ export const fetchOpenAIModels = async (config: AIConfig): Promise<{id: string, 
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(`获取模型列表失败: ${response.status} - ${errorData.error?.message || response.statusText}`);
+            const statusMsg = `HTTP ${response.status}`;
+            const apiMsg = errorData.error?.message || response.statusText;
+            throw new Error(`${statusMsg} - ${apiMsg}`);
         }
 
         const data = await response.json();
@@ -52,9 +65,9 @@ export const fetchOpenAIModels = async (config: AIConfig): Promise<{id: string, 
         }
         
         return [];
-    } catch (error) {
-        console.error("OpenAI Model Fetch Failed:", error);
-        throw error;
+    } catch (error: any) {
+        console.error("Model Fetch Failed:", error);
+        throw new Error(`获取模型列表失败: ${sanitizeError(error)}`);
     }
 };
 
@@ -93,12 +106,12 @@ const callGeminiStream = async (config: AIConfig, history: ChatMessage[], contex
     return fullText;
 
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    let msg = error.message || '未知错误';
+    console.error("AI Service Error:", error);
+    let msg = sanitizeError(error);
     if (msg.includes('404') || msg.includes('NOT_FOUND')) {
         msg = `模型 "${config.modelId}" 不存在或不可用。请在设置中切换模型。`;
     }
-    throw new Error(`Gemini 调用失败: ${msg}`);
+    throw new Error(`AI 服务调用失败: ${msg}`);
   }
 };
 
@@ -134,7 +147,7 @@ const callOpenAIStream = async (config: AIConfig, history: ChatMessage[], contex
   
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(`OpenAI API Error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+        throw new Error(`${response.status} - ${errorData.error?.message || response.statusText}`);
       }
   
       if (!response.body) throw new Error("ReadableStream not supported");
@@ -171,8 +184,8 @@ const callOpenAIStream = async (config: AIConfig, history: ChatMessage[], contex
       return fullText || "AI 没有返回任何内容。";
   
     } catch (error: any) {
-      console.error("OpenAI API Error:", error);
-      throw new Error(`OpenAI 调用失败: ${error.message || '未知错误'}`);
+      console.error("AI Service Error:", error);
+      throw new Error(`AI 服务调用失败: ${sanitizeError(error)}`);
     }
   };
 
@@ -309,7 +322,7 @@ export const generateExamBlueprint = async (config: ExamConfig, aiConfig: AIConf
 
         return parsed;
     } catch (e: any) {
-        throw new Error("Blueprint generation failed: " + e.message);
+        throw new Error("Blueprint generation failed: " + sanitizeError(e));
     }
 };
 
@@ -349,7 +362,7 @@ export const generateExamQuestion = async (
             isGraded: false
         };
     } catch (e: any) {
-        throw new Error("Question gen failed: " + e.message);
+        throw new Error("Question gen failed: " + sanitizeError(e));
     }
 };
 
@@ -395,6 +408,6 @@ export const gradeExamQuestion = async (
                 feedback: isCorrect ? "回答正确" : "回答错误"
             };
         }
-        return { score: 0, feedback: "AI 批改失败，请人工核对。" };
+        return { score: 0, feedback: "AI 批改失败，请人工复核。" };
     }
 };

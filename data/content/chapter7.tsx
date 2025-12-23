@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MathFormula } from '../../components/MathFormula';
 import { FunctionPlot } from '../../components/FunctionPlot';
@@ -285,40 +286,103 @@ export const Chapter7Content = {
   ),
   section7_4: (
     <div className="space-y-6">
+        {/* Model Analysis */}
+        <div className="bg-gradient-to-br from-white to-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm">
+            <h4 className="font-bold text-slate-800 mb-6 text-lg flex items-center gap-2">
+                <Anchor className="w-5 h-5 text-indigo-500" /> 正弦型函数模型详解
+            </h4>
+            
+            <div className="bg-white p-6 rounded-xl border border-indigo-200 text-center mb-6 shadow-sm">
+                <MathFormula tex="y = A\sin(\omega x + \phi) + k" block className="text-2xl font-bold text-indigo-800 mb-2" />
+                <div className="text-xs text-slate-500 uppercase tracking-widest font-bold">The General Sinusoidal Model</div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4 text-sm">
+                <div className="p-4 bg-white rounded-xl border border-slate-200">
+                    <span className="block font-bold text-slate-700 mb-2">物理含义</span>
+                    <ul className="space-y-2 text-slate-600">
+                        <li><span className="font-bold text-indigo-600">A (振幅):</span> 偏离平衡位置的最大距离。 <MathFormula tex="A = \frac{y_{max}-y_{min}}{2}" /></li>
+                        <li><span className="font-bold text-indigo-600">k (偏置):</span> 平衡位置/中心线。 <MathFormula tex="k = \frac{y_{max}+y_{min}}{2}" /></li>
+                        <li><span className="font-bold text-indigo-600">ω (角频率):</span> 变化快慢。 <MathFormula tex="\omega = \frac{2\pi}{T}" /></li>
+                        <li><span className="font-bold text-indigo-600">φ (初相):</span> <MathFormula tex="x=0" /> 时的状态。</li>
+                    </ul>
+                </div>
+                <div className="p-4 bg-white rounded-xl border border-slate-200 flex flex-col justify-center">
+                    <FunctionPlot 
+                        config={{
+                            functions: [{ expr: "2 * Math.sin(x) + 1", color: "indigo", label: "y=2\\sin x + 1" }],
+                            xDomain: [0, 10],
+                            yDomain: [-2, 4]
+                        }}
+                    />
+                    <div className="text-center text-xs text-slate-400 mt-2">
+                        示例：中心线 y=1, 振幅=2
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* Ferris Wheel Example */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <h4 className="font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2 text-lg flex items-center gap-2">
+                <RefreshCcw className="w-5 h-5 text-emerald-500" /> 经典模型：摩天轮
+            </h4>
+            <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex-1 space-y-4">
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                        设摩天轮半径为 <MathFormula tex="R" />，中心距离地面高度为 <MathFormula tex="h_0" />，转动角速度为 <MathFormula tex="\omega" />。
+                        若 <MathFormula tex="t=0" /> 时乘客位于最低点，则乘客相对地面的高度 <MathFormula tex="H(t)" /> 为：
+                    </p>
+                    <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 text-center">
+                        <MathFormula tex="H(t) = -R\cos(\omega t) + h_0" block className="text-xl font-bold text-emerald-800" />
+                        <div className="text-xs text-emerald-600 mt-2">
+                            或 <MathFormula tex="H(t) = R\sin(\omega t - \frac{\pi}{2}) + h_0" />
+                        </div>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-lg text-xs text-slate-500">
+                        <span className="font-bold">解题关键：</span>确定最低点和最高点的时间差（半个周期），从而求出 <MathFormula tex="\omega" />。
+                    </div>
+                </div>
+                <div className="flex-1 bg-slate-50 rounded-xl border border-slate-100 p-4 flex flex-col items-center justify-center">
+                    <div className="relative w-32 h-32 border-4 border-slate-300 rounded-full flex items-center justify-center">
+                        <div className="w-2 h-2 bg-slate-400 rounded-full"></div>
+                        <div className="absolute bottom-0 w-4 h-4 bg-red-500 rounded-full translate-y-1/2"></div>
+                        <div className="absolute top-0 w-4 h-4 bg-blue-500 rounded-full -translate-y-1/2"></div>
+                    </div>
+                    <div className="w-40 border-b-2 border-slate-400 mt-8 relative">
+                        <div className="absolute -top-8 left-1/2 h-8 w-0.5 bg-slate-300 -translate-x-1/2"></div>
+                        <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs text-slate-500">地面</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* Port Water Depth (Refined) */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
             <div className="absolute top-0 right-0 p-6 opacity-5">
                 <Anchor className="w-32 h-32" />
             </div>
-            <h4 className="font-bold text-slate-800 mb-4 text-lg">应用：港口水深的变化</h4>
-            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-                海水受月球和太阳引力影响形成潮汐，港口水深随时间呈周期性变化。我们可以用三角函数模型来描述这一规律，保障船只安全进出港。
-            </p>
+            <h4 className="font-bold text-slate-800 mb-4 text-lg">应用：港口水深与安全进港</h4>
             
             <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100 mb-6">
                 <h5 className="font-bold text-blue-900 mb-3 text-sm">建模步骤</h5>
                 <ol className="list-decimal list-inside text-sm text-slate-700 space-y-2">
-                    <li><span className="font-bold">搜集数据：</span>记录不同时刻的水深数据。</li>
-                    <li><span className="font-bold">绘制散点图：</span>观察数据分布，判断是否具有周期性（波浪形）。</li>
-                    <li><span className="font-bold">选择模型：</span>通常选用 <MathFormula tex="y = A\sin(\omega x + \phi) + k" />。</li>
-                    <li><span className="font-bold">求解参数：</span>
-                        <div className="mt-2 ml-4 grid grid-cols-1 gap-2 text-sm bg-white p-3 rounded-lg border border-blue-50 shadow-sm">
-                            <div><span className="font-bold text-blue-600">k (平衡位置):</span> <MathFormula tex="k = \frac{H_{max} + H_{min}}{2}" /></div>
-                            <div><span className="font-bold text-blue-600">A (振幅):</span> <MathFormula tex="A = \frac{H_{max} - H_{min}}{2}" /></div>
-                            <div><span className="font-bold text-blue-600">T (周期):</span> 相邻两个高潮（或低潮）的时间差。 <MathFormula tex="\omega = \frac{2\pi}{T}" /></div>
-                            <div><span className="font-bold text-blue-600">φ (初相):</span> 代入最高点或最低点坐标求得。</div>
+                    <li><span className="font-bold">确定参数：</span>
+                        <div className="mt-2 ml-4 grid grid-cols-1 gap-2 text-xs bg-white p-3 rounded-lg border border-blue-50 shadow-sm">
+                            <div><span className="font-bold text-blue-600">k (平均水深):</span> <MathFormula tex="\frac{H_{max} + H_{min}}{2}" /></div>
+                            <div><span className="font-bold text-blue-600">A (潮差一半):</span> <MathFormula tex="\frac{H_{max} - H_{min}}{2}" /></div>
+                            <div><span className="font-bold text-blue-600">ω (角速度):</span> <MathFormula tex="\frac{2\pi}{T}" /> (通常潮汐周期约为12小时)</div>
                         </div>
+                    </li>
+                    <li><span className="font-bold">建立不等式：</span>
+                        若船只吃水 <MathFormula tex="d" />，安全余量 <MathFormula tex="a" />，则安全进港条件为：
+                        <MathFormula tex="y(t) \ge d + a" block className="my-2 font-bold text-center text-blue-800"/>
+                    </li>
+                    <li><span className="font-bold">求解区间：</span>
+                        利用三角函数图像或单位圆求解 <MathFormula tex="t" /> 的范围。
                     </li>
                 </ol>
             </div>
-
-            <WarningCard title="安全进港问题">
-                <p className="text-sm">
-                    若船只吃水深度为 <MathFormula tex="d" />，安全余量为 <MathFormula tex="h" />，则安全进港条件为：
-                    <br/>
-                    <span className="font-bold block text-center my-2 text-lg text-primary-700"><MathFormula tex="y(t) \ge d + h" /></span>
-                    通过解三角不等式，可以求出船只可以进港的时间段。
-                </p>
-            </WarningCard>
         </div>
     </div>
   )

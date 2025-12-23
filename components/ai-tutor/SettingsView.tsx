@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Settings, Sparkles, Bot, Loader2, RefreshCcw, CheckCircle2, XCircle, Save, Construction } from 'lucide-react';
+import { Settings, Sparkles, Bot, Loader2, RefreshCcw, CheckCircle2, XCircle, Save, Construction, AlertTriangle, ExternalLink, Wrench } from 'lucide-react';
 import { AIConfig, AIProvider } from '../../types';
 import { fetchOpenAIModels, testGeminiConnection } from '../../services/geminiService';
 
@@ -19,6 +20,47 @@ interface SettingsViewProps {
     onToggleDebugMode: () => void;
 }
 
+const DEEPSEEK_API_URL = "https://api.deepseek.com";
+
+const ApiTutorial = () => (
+    <div className="bg-white border border-slate-200 rounded-lg p-4 mb-4">
+        <h4 className="font-bold text-slate-700 text-sm mb-3 flex items-center gap-2">
+            <ExternalLink className="w-4 h-4" /> 如何获取 API Key?
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="flex flex-col p-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded transition-colors text-slate-600 hover:text-indigo-700">
+                <span className="font-bold mb-1">Google Gemini</span>
+                <span>免费额度高，速度快</span>
+            </a>
+            <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer" className="flex flex-col p-2 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded transition-colors text-slate-600 hover:text-blue-700">
+                <span className="font-bold mb-1">DeepSeek</span>
+                <span>性价比极高，推理强</span>
+            </a>
+            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="flex flex-col p-2 bg-slate-50 hover:bg-green-50 border border-slate-200 hover:border-green-200 rounded transition-colors text-slate-600 hover:text-green-700">
+                <span className="font-bold mb-1">OpenAI</span>
+                <span>通用性最强</span>
+            </a>
+        </div>
+    </div>
+);
+
+const ErrorGuide = () => (
+    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3 text-xs text-amber-900 animate-in fade-in slide-in-from-top-1">
+        <h4 className="font-bold text-amber-800 text-sm mb-2 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" /> 常见报错指引
+        </h4>
+        <ul className="space-y-1 list-disc list-inside opacity-90">
+            <li><span className="font-bold">401 Unauthorized:</span> API Key 无效。请检查 Key 是否复制完整，或是否欠费。</li>
+            <li><span className="font-bold">404 Not Found:</span> Base URL 填写错误或模型名称不存在。
+                <div className="pl-4 mt-0.5 text-amber-700">- DeepSeek 用户请检查 URL 是否为 {DEEPSEEK_API_URL}</div>
+            </li>
+            <li><span className="font-bold">429 Too Many Requests:</span> 请求过快或余额不足。请充值或稍后再试。</li>
+            <li><span className="font-bold">5xx Server Error:</span> 服务商服务器崩溃。请切换模型或稍后重试。</li>
+            <li><span className="font-bold">TypeError / Network Error:</span> 网络连接失败。请检查网络或代理设置。</li>
+        </ul>
+    </div>
+);
+
 export const SettingsView: React.FC<SettingsViewProps> = ({ 
     config, 
     onSave, 
@@ -33,6 +75,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     const [isTesting, setIsTesting] = useState(false);
     const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [testMessage, setTestMessage] = useState('');
+    const [deepSeekDetected, setDeepSeekDetected] = useState(false);
 
     useEffect(() => {
         setDraftConfig(config);
@@ -59,6 +102,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             modelId: defaultModel
         });
         setTestStatus('idle');
+        setDeepSeekDetected(false);
+    };
+
+    const handleApplyDeepSeekFix = () => {
+        setDraftConfig(prev => ({ ...prev, baseUrl: DEEPSEEK_API_URL }));
+        setDeepSeekDetected(false);
+        setTestMessage("已修正 URL，请再次点击测试");
+        setTestStatus('idle');
     };
 
     const handleTestAndFetch = async () => {
@@ -73,20 +124,42 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         setIsTesting(true);
         setTestStatus('idle');
         setTestMessage('');
+        setDeepSeekDetected(false);
   
         try {
             if (effectiveTestConfig.provider === 'openai') {
-                const models = await fetchOpenAIModels(effectiveTestConfig);
-                if (models.length > 0) {
-                    onUpdateModels('openai', models);
-                    // Force update draft config with first model immediately
-                    setDraftConfig(prev => ({ ...prev, modelId: models[0].id }));
-                    
-                    setTestStatus('success');
-                    setTestMessage(`成功！获取 ${models.length} 个模型`);
-                } else {
-                     setTestStatus('success');
-                     setTestMessage('连接成功，但模型列表为空');
+                try {
+                    // 1. Try with current config
+                    const models = await fetchOpenAIModels(effectiveTestConfig);
+                    if (models.length > 0) {
+                        onUpdateModels('openai', models);
+                        setDraftConfig(prev => ({ ...prev, modelId: models[0].id }));
+                        setTestStatus('success');
+                        setTestMessage(`成功！获取 ${models.length} 个模型`);
+                    } else {
+                        setTestStatus('success');
+                        setTestMessage('连接成功，但模型列表为空');
+                    }
+                } catch (originalError: any) {
+                    // 2. If failed, check if it might be DeepSeek URL mismatch
+                    const currentUrl = effectiveTestConfig.baseUrl || '';
+                    // Only probe if URL is NOT already DeepSeek's
+                    if (!currentUrl.includes('api.deepseek.com')) {
+                        try {
+                            const dsConfig = { ...effectiveTestConfig, baseUrl: DEEPSEEK_API_URL };
+                            const dsModels = await fetchOpenAIModels(dsConfig);
+                            if (dsModels.length > 0) {
+                                setDeepSeekDetected(true);
+                                // Don't throw here, just set error state but show the fix option
+                                setTestStatus('error'); 
+                                setTestMessage("连接失败，但检测到 DeepSeek API 可用。");
+                                return; // Exit logic, wait for user to click fix
+                            }
+                        } catch (dsError) {
+                            // DeepSeek probe failed too, ignore and throw original
+                        }
+                    }
+                    throw originalError;
                 }
             } else {
                 await testGeminiConnection(effectiveTestConfig.apiKey);
@@ -159,6 +232,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             >
                                 <Bot className="w-5 h-5" />
                                 OpenAI
+                                <span className="text-[10px] font-normal opacity-75 transform scale-90">兼容 DeepSeek</span>
                             </button>
                         </div>
                     </div>
@@ -166,7 +240,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <div className="text-sm text-slate-500 bg-slate-50 p-4 rounded-xl border border-slate-200 mt-6 leading-relaxed">
                         <h4 className="font-bold text-slate-700 mb-2">关于试卷功能</h4>
                         <p className="mb-2">试卷功能正处于测试阶段，AI 出题可能存在格式错误或逻辑偏差，建议人工复核。</p>
-                        <p>请选择具备深度思考能力的模型（如 Pro/Plus 版本），以确保试题质量。</p>
+                        <p>请选择具备深度思考能力的模型，以确保试题质量。</p>
                     </div>
 
                     <div className={useEnvKey ? 'opacity-50 pointer-events-none grayscale' : ''}>
@@ -191,27 +265,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 type="text" 
                                 value={draftConfig.baseUrl || ''}
                                 onChange={(e) => setDraftConfig({...draftConfig, baseUrl: e.target.value})}
-                                placeholder="https://api.openai.com/v1"
+                                placeholder="例如: https://api.deepseek.com"
                                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
                             />
                         </div>
                     )}
                     
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={handleTestAndFetch}
-                            disabled={(!draftConfig.apiKey && !useEnvKey) || isTesting}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-                        >
-                            {isTesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
-                            测试连接
-                        </button>
-                        {testStatus !== 'idle' && (
-                            <span className={`text-xs flex items-center gap-1 ${testStatus === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-                                {testStatus === 'success' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                                {testMessage}
-                            </span>
+                    <div>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={handleTestAndFetch}
+                                disabled={(!draftConfig.apiKey && !useEnvKey) || isTesting}
+                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {isTesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
+                                测试连接
+                            </button>
+                            {testStatus !== 'idle' && (
+                                <span className={`text-xs flex items-center gap-1 ${testStatus === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                                    {testStatus === 'success' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                                    {testMessage}
+                                </span>
+                            )}
+                        </div>
+
+                        {deepSeekDetected && (
+                            <div className="mt-3 bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-lg flex items-center justify-between text-xs animate-in fade-in slide-in-from-top-1">
+                                <div className="flex items-center gap-2">
+                                    <Wrench className="w-4 h-4 shrink-0" />
+                                    <span>检测到您的 API Key 可用于 DeepSeek，建议切换 URL。</span>
+                                </div>
+                                <button 
+                                    onClick={handleApplyDeepSeekFix}
+                                    className="font-bold underline hover:text-blue-900 ml-3 whitespace-nowrap"
+                                >
+                                    一键修复
+                                </button>
+                            </div>
                         )}
+
+                        {testStatus === 'error' && <ErrorGuide />}
                     </div>
 
                     <div>
@@ -242,6 +335,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <Save className="w-4 h-4" />
                         保存配置
                     </button>
+
+                    <div className="border-t border-slate-100 pt-4 mt-4">
+                        <ApiTutorial />
+                    </div>
                 </div>
             </div>
         </div>

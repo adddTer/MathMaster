@@ -16,6 +16,8 @@ const DEFAULT_CONFIG: AIConfig = {
   modelId: 'gemini-2.5-flash'
 };
 
+const EMPTY_TOPICS: Topic[] = [];
+
 // Access System Env Key safely
 const getSystemEnvKey = (): string => {
     try {
@@ -125,11 +127,21 @@ const App: React.FC = () => {
 
   // Determine current dataset based on subject
   const currentTopicsData = useMemo(() => {
-      return currentSubject === 'math' ? MATH_TOPICS : CHINESE_TOPICS;
+      switch(currentSubject) {
+          case 'math': return MATH_TOPICS;
+          case 'chinese': return CHINESE_TOPICS;
+          default: return EMPTY_TOPICS;
+      }
   }, [currentSubject]);
 
   // Initialize selection if empty or invalid after switch
   useEffect(() => {
+      if (currentTopicsData.length === 0) {
+          setCurrentTopicId('');
+          setCurrentSubTopicId('');
+          return;
+      }
+
       const topic = currentTopicsData.find(t => t.id === currentTopicId) || currentTopicsData[0];
       const sub = topic.subtopics.find(s => s.id === currentSubTopicId) || topic.subtopics[0];
       
@@ -144,7 +156,7 @@ const App: React.FC = () => {
   [currentTopicId, currentTopicsData]);
 
   const currentSubTopic = useMemo(() => 
-    currentTopic.subtopics.find(s => s.id === currentSubTopicId) || currentTopic.subtopics[0],
+    currentTopic?.subtopics.find(s => s.id === currentSubTopicId) || currentTopic?.subtopics[0],
   [currentTopic, currentSubTopicId]);
 
   const allSubTopicsFlat = useMemo(() => {
@@ -243,7 +255,7 @@ const App: React.FC = () => {
       return title;
   };
 
-  const isEssayTool = currentSubTopic.id === 'ai-essay-generator';
+  const isEssayTool = currentSubTopic?.id === 'ai-essay-generator';
 
   return (
     <div className="fixed inset-0 flex bg-slate-50 font-sans overflow-hidden">
@@ -263,8 +275,8 @@ const App: React.FC = () => {
           <div className="flex items-center gap-3 overflow-hidden">
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"><Menu className="w-6 h-6" /></button>
             <div className="flex flex-col">
-                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{currentTopic.title}</span>
-                 <span className="font-bold text-slate-800 truncate text-sm">{currentSubTopic.title}</span>
+                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{currentTopic?.title || '高中智能伴学'}</span>
+                 <span className="font-bold text-slate-800 truncate text-sm">{currentSubTopic?.title || (currentTopicsData.length === 0 ? '学科建设中' : '请选择章节')}</span>
             </div>
           </div>
           <button onClick={() => setShowAITutorMobile(true)} className="flex items-center gap-2 px-3 py-1.5 bg-primary-50 text-primary-600 rounded-full hover:bg-primary-100 transition-colors text-sm font-medium border border-primary-100">
@@ -274,7 +286,15 @@ const App: React.FC = () => {
 
         <div className="flex-1 flex overflow-hidden relative">
           <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto w-full ${isEssayTool ? 'bg-slate-100' : ''}`}>
-            {isEssayTool ? (
+            {currentTopicsData.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8">
+                    <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                        <Sparkles className="w-10 h-10 text-slate-300" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-600">该学科内容正在整理中</h3>
+                    <p className="text-sm mt-2">AI 辅导功能依然可用，您可以直接提问。</p>
+                </div>
+            ) : isEssayTool ? (
                 <div className="h-full">
                     {/* Inject effective config and handlers for settings */}
                     <EssayEditor 
@@ -329,7 +349,7 @@ const App: React.FC = () => {
           {!isEssayTool && (
             <aside className="hidden xl:block w-96 border-l border-slate-200 bg-white h-full shrink-0 shadow-sm z-20">
                 <div className="h-full p-0">
-                    <AITutor currentContext={`${currentTopic.title} - ${currentSubTopic.title}`} initialQuery={initialAIQuery} onClearInitialQuery={() => setInitialAIQuery('')} onNavigate={handleNavigate} />
+                    <AITutor currentContext={`${currentTopic?.title || '综合'} - ${currentSubTopic?.title || '学习'}`} initialQuery={initialAIQuery} onClearInitialQuery={() => setInitialAIQuery('')} onNavigate={handleNavigate} />
                 </div>
             </aside>
           )}
@@ -340,7 +360,7 @@ const App: React.FC = () => {
                <div className="font-bold text-slate-800 flex items-center gap-2"><div className="p-1 bg-primary-100 rounded-md text-primary-600"><GraduationCap className="w-5 h-5" /></div><span>AI 智能辅导</span></div>
                <button onClick={() => setShowAITutorMobile(false)} className="p-2 bg-white border border-slate-200 rounded-full hover:bg-slate-100 active:scale-95 transition-all shadow-sm"><X className="w-5 h-5 text-slate-600" /></button>
              </div>
-             <div className="flex-1 p-0 overflow-hidden bg-slate-50"><AITutor currentContext={`${currentTopic.title} - ${currentSubTopic.title}`} initialQuery={initialAIQuery} onClearInitialQuery={() => setInitialAIQuery('')} onNavigate={handleNavigate} /></div>
+             <div className="flex-1 p-0 overflow-hidden bg-slate-50"><AITutor currentContext={`${currentTopic?.title || '综合'} - ${currentSubTopic?.title || '学习'}`} initialQuery={initialAIQuery} onClearInitialQuery={() => setInitialAIQuery('')} onNavigate={handleNavigate} /></div>
            </div>
         )}
       </main>

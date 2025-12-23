@@ -1,7 +1,7 @@
 
 import { ReactNode } from 'react';
 
-export type SubjectType = 'math' | 'chinese';
+export type SubjectType = 'math' | 'chinese' | 'english' | 'physics' | 'chemistry' | 'biology';
 
 export interface SubTopic {
   id: string;

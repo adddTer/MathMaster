@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { Topic, SubTopic, SubjectType } from '../types';
-import { ChevronRight, ChevronDown, Quote, BookMarked, Circle, CheckCircle2, Calculator, ScrollText } from 'lucide-react';
+import { Topic, SubjectType } from '../types';
+import { ChevronRight, ChevronDown, BookMarked, Calculator, ScrollText, Languages, Atom, FlaskConical, Dna, Library, LayoutGrid } from 'lucide-react';
 
 interface SidebarProps {
   topics: Topic[];
@@ -13,22 +14,41 @@ interface SidebarProps {
   onCloseMobile: () => void;
 }
 
-const QUOTES = [
-  { text: "数学是上帝书写宇宙的语言。", author: "伽利略" },
-  { text: "上帝创造了整数，其余都是人造的。", author: "克罗内克" },
-  { text: "数学是科学的皇后。", author: "高斯" },
-  { text: "几何无王者之道。", author: "欧几里得" },
-  { text: "纯数学，就其本质而言，是逻辑思想的诗篇。", author: "爱因斯坦" },
-  { text: "自然总是以最简洁的方式行事。", author: "开普勒" },
-  { text: "数学是理性的音乐。", author: "西尔维斯特" },
-  { text: "万物皆数。", author: "毕达哥拉斯" },
-  { text: "知之者不如好之者，好之者不如乐之者。", author: "孔子" },
-  { text: "学而不思则罔，思而不学则殆。", author: "孔子" },
-  { text: "我思故我在。", author: "笛卡尔" },
-  { text: "数学的本质在于它的自由。", author: "康托尔" },
-  { text: "给我一个支点，我就能撬动地球。", author: "阿基米德" },
-  { text: "数学是无穷的科学。", author: "赫尔曼·外尔" }
-];
+// --- Configuration ---
+
+const SUBJECT_CONFIG: Record<SubjectType, { label: string, color: string, icon: any }> = {
+    math: { label: "数学", color: "blue", icon: Calculator },
+    chinese: { label: "语文", color: "orange", icon: ScrollText },
+    english: { label: "英语", color: "pink", icon: Languages },
+    physics: { label: "物理", color: "indigo", icon: Atom },
+    chemistry: { label: "化学", color: "emerald", icon: FlaskConical },
+    biology: { label: "生物", color: "teal", icon: Dna },
+};
+
+// Define available modules (Books) for each subject
+const MODULES: Record<SubjectType, string[]> = {
+    math: ['全部', '必修第一册', '必修第二册', '选择性必修'],
+    chinese: ['全部', '必修上册', '必修下册'],
+    english: ['全部', '必修一', '必修二', '必修三'],
+    physics: ['全部', '必修一', '必修二', '必修三'],
+    chemistry: ['全部', '必修一', '必修二'],
+    biology: ['全部', '必修一', '必修二'],
+};
+
+// Helper to map categories to Math books (Approximate based on standard curriculum)
+const getMathModule = (category: string): string => {
+    if (category.includes('前置') || category.includes('集合') || category.includes('逻辑') || category.includes('不等式') || category.includes('指数') || category.includes('函数概念')) {
+        return '必修第一册';
+    }
+    if (category.includes('基本初等') || category.includes('三角') || category.includes('向量') || category.includes('恒等变换') || category.includes('函数应用')) {
+        return '必修第二册';
+    }
+    // Chapters 11-15 usually fall into selective or later books
+    if (category.includes('解三角形') || category.includes('复数') || category.includes('立体') || category.includes('统计') || category.includes('概率')) {
+        return '选择性必修';
+    }
+    return '其他';
+};
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
   topics, 
@@ -40,23 +60,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onCloseMobile
 }) => {
-  const [quote, setQuote] = useState(QUOTES[0]);
-  // State to track expanded topics. Default to keeping the current topic expanded.
   const [expandedTopicIds, setExpandedTopicIds] = useState<Set<string>>(new Set([currentTopicId]));
+  const [activeModule, setActiveModule] = useState<string>('全部');
 
+  // Reset module filter when subject changes
   useEffect(() => {
-    // Ensure the current topic is always expanded when it changes externally
+      setActiveModule('全部');
+  }, [currentSubject]);
+
+  // Auto-expand current topic
+  useEffect(() => {
     setExpandedTopicIds(prev => {
         const newSet = new Set(prev);
         newSet.add(currentTopicId);
         return newSet;
     });
   }, [currentTopicId]);
-
-  useEffect(() => {
-    const randomIndex = Math.floor(Math.random() * QUOTES.length);
-    setQuote(QUOTES[randomIndex]);
-  }, []);
 
   const toggleTopic = (topicId: string) => {
       setExpandedTopicIds(prev => {
@@ -70,26 +89,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
       });
   };
 
-  // Group topics by category
+  // Group and Filter Topics
   const groupedTopics = useMemo(() => {
     const groups: Record<string, Topic[]> = {};
     const cats: string[] = [];
+    
     topics.forEach(topic => {
-      if (!groups[topic.category]) {
-        groups[topic.category] = [];
-        cats.push(topic.category);
+      // Filter Logic
+      let shouldShow = true;
+      if (activeModule !== '全部') {
+          if (currentSubject === 'math') {
+              const book = getMathModule(topic.category);
+              if (book !== activeModule) shouldShow = false;
+          }
+          // Add logic for other subjects here if needed
       }
-      groups[topic.category].push(topic);
+
+      if (shouldShow) {
+          if (!groups[topic.category]) {
+            groups[topic.category] = [];
+            cats.push(topic.category);
+          }
+          groups[topic.category].push(topic);
+      }
     });
     return { groups, cats };
-  }, [topics]);
+  }, [topics, activeModule, currentSubject]);
+
+  const SubjectBtn = ({ type }: { type: SubjectType }) => {
+      const conf = SUBJECT_CONFIG[type];
+      const isActive = currentSubject === type;
+      const Icon = conf.icon;
+      
+      return (
+        <button 
+            onClick={() => onSwitchSubject(type)}
+            className={`
+                flex flex-col items-center justify-center gap-1.5 py-2.5 rounded-xl transition-all duration-200
+                ${isActive 
+                    ? `bg-white text-${conf.color}-600 shadow-sm ring-1 ring-slate-200 transform scale-105 z-10` 
+                    : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}
+            `}
+        >
+            <Icon className={`w-5 h-5 ${isActive ? `text-${conf.color}-500 fill-current opacity-20` : 'opacity-70'}`} />
+            <span className={`text-[10px] font-bold ${isActive ? 'opacity-100' : 'opacity-80'}`}>{conf.label}</span>
+        </button>
+      );
+  };
 
   return (
     <>
       {/* Mobile Overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 bg-slate-900/20 z-40 md:hidden backdrop-blur-sm transition-opacity"
           onClick={onCloseMobile}
         />
       )}
@@ -97,117 +150,147 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Sidebar Content */}
       <aside 
         className={`
-          fixed md:static top-0 h-full w-80 bg-white border-r border-slate-200 z-50 md:z-auto
+          fixed md:static top-0 h-full w-80 bg-[#f8fafc] border-r border-slate-200 z-50 md:z-auto
           transition-transform duration-300 ease-in-out flex flex-col shrink-0
-          ${isOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full md:translate-x-0 md:shadow-none'}
+          ${isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0 md:shadow-none'}
         `}
       >
-        <div className="p-5 border-b border-slate-100 flex-shrink-0 bg-slate-50/50">
-          <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2 mb-4">
-            <span>高中智能伴学</span>
-          </h1>
-          
-          {/* Subject Switcher */}
-          <div className="flex bg-slate-200/50 p-1 rounded-lg">
-              <button 
-                  onClick={() => onSwitchSubject('math')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all ${currentSubject === 'math' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                  <Calculator className="w-3.5 h-3.5" /> 数学
-              </button>
-              <button 
-                  onClick={() => onSwitchSubject('chinese')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all ${currentSubject === 'chinese' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                  <ScrollText className="w-3.5 h-3.5" /> 语文
-              </button>
-          </div>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto p-3 space-y-6">
-          {groupedTopics.cats.map((category) => {
-            const categoryTopics = groupedTopics.groups[category];
-            if (!categoryTopics) return null;
-
-            return (
-              <div key={category} className="space-y-2">
-                <div className="px-3 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <BookMarked className="w-3 h-3" />
-                  {category}
-                </div>
-                
-                <div className="space-y-1">
-                {categoryTopics.map((topic) => {
-                  const isExpanded = expandedTopicIds.has(topic.id);
-                  const isTopicActive = currentTopicId === topic.id;
-
-                  return (
-                    <div key={topic.id} className="rounded-lg overflow-hidden">
-                      {/* Topic Header */}
-                      <button
-                        onClick={() => toggleTopic(topic.id)}
-                        className={`
-                          w-full flex items-center gap-3 p-2.5 text-left transition-all duration-200
-                          ${isTopicActive 
-                            ? 'bg-primary-50/50 text-primary-800' 
-                            : 'text-slate-700 hover:bg-slate-50'}
-                        `}
-                      >
-                        <span className={`shrink-0 ${isTopicActive ? 'text-primary-600' : 'text-slate-400'}`}>
-                          {React.cloneElement(topic.icon as React.ReactElement<any>, { className: "w-4.5 h-4.5" })}
-                        </span>
-                        <span className="flex-1 text-sm font-medium truncate">{topic.title}</span>
-                        {isExpanded ? (
-                             <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-                        ) : (
-                             <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
-                        )}
-                      </button>
-
-                      {/* Subtopics List */}
-                      {isExpanded && (
-                        <div className="bg-slate-50/30 border-l-2 border-slate-100 ml-4 pl-1 my-1 space-y-0.5">
-                            {topic.subtopics.map((sub) => {
-                                const isSubActive = currentSubTopicId === sub.id;
-                                return (
-                                    <button 
-                                        key={sub.id}
-                                        onClick={() => {
-                                            onSelectSubTopic(topic.id, sub.id);
-                                            onCloseMobile();
-                                        }}
-                                        className={`
-                                            w-full flex items-center gap-2 p-2 rounded-md text-left text-sm transition-colors
-                                            ${isSubActive ? 'bg-white text-primary-600 font-medium shadow-sm ring-1 ring-slate-100' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/50'}
-                                        `}
-                                    >
-                                        <div className={`w-1.5 h-1.5 rounded-full ${isSubActive ? 'bg-primary-500' : 'bg-slate-300'}`}></div>
-                                        <span className="truncate">{sub.title}</span>
-                                    </button>
-                                )
-                            })}
-                        </div>
-                      )}
+        {/* Header Section */}
+        <div className="flex-shrink-0 bg-white border-b border-slate-100 shadow-[0_4px_20px_-12px_rgba(0,0,0,0.1)] z-10">
+            <div className="p-4 pb-2">
+                <h1 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
+                    <div className="bg-primary-600 text-white p-1.5 rounded-lg">
+                        <Library className="w-4 h-4" />
                     </div>
-                  );
-                })}
+                    <span>高中智能伴学</span>
+                </h1>
+                
+                {/* Subject Grid */}
+                <div className="bg-slate-100/80 p-1.5 rounded-2xl grid grid-cols-3 gap-1 mb-4">
+                    <SubjectBtn type="math" />
+                    <SubjectBtn type="chinese" />
+                    <SubjectBtn type="english" />
+                    <SubjectBtn type="physics" />
+                    <SubjectBtn type="chemistry" />
+                    <SubjectBtn type="biology" />
                 </div>
-              </div>
-            );
-          })}
-        </nav>
+            </div>
 
-        <div className="p-4 border-t border-slate-100 flex-shrink-0">
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 relative group">
-            <Quote className="w-4 h-4 text-slate-300 absolute -top-2 -left-1 fill-current" />
-            <p className="text-xs text-slate-600 italic leading-relaxed mb-2 mt-1">
-              "{quote.text}"
-            </p>
-            <p className="text-[10px] text-slate-400 text-right font-bold uppercase tracking-wider">
-              — {quote.author}
-            </p>
-          </div>
+            {/* Module Filter Tabs */}
+            <div className="px-4 pb-0 overflow-x-auto scrollbar-hide">
+                <div className="flex gap-2 pb-3 min-w-max">
+                    {MODULES[currentSubject].map((mod) => (
+                        <button
+                            key={mod}
+                            onClick={() => setActiveModule(mod)}
+                            className={`
+                                px-3 py-1.5 rounded-full text-xs font-bold transition-colors
+                                ${activeModule === mod 
+                                    ? 'bg-slate-800 text-white shadow-md shadow-slate-200' 
+                                    : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700'}
+                            `}
+                        >
+                            {mod}
+                        </button>
+                    ))}
+                </div>
+            </div>
         </div>
+
+        {/* Content List */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-6">
+          {topics.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+                  <BookMarked className="w-10 h-10 mb-3 opacity-20" />
+                  <span className="text-xs font-medium">该学科内容正在整理中...</span>
+              </div>
+          ) : groupedTopics.cats.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+                  <LayoutGrid className="w-10 h-10 mb-3 opacity-20" />
+                  <span className="text-xs font-medium">该分册暂无内容</span>
+                  <button onClick={() => setActiveModule('全部')} className="mt-2 text-xs text-primary-600 hover:underline">
+                      查看全部
+                  </button>
+              </div>
+          ) : (
+              groupedTopics.cats.map((category) => {
+                const categoryTopics = groupedTopics.groups[category];
+                if (!categoryTopics) return null;
+
+                return (
+                  <div key={category} className="space-y-2 animate-in fade-in slide-in-from-left-4 duration-300">
+                    <div className="px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <div className="h-px bg-slate-200 flex-1"></div>
+                      <span className="flex items-center gap-1.5"><BookMarked className="w-3 h-3" /> {category}</span>
+                      <div className="h-px bg-slate-200 flex-1"></div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                    {categoryTopics.map((topic) => {
+                      const isExpanded = expandedTopicIds.has(topic.id);
+                      const isTopicActive = currentTopicId === topic.id;
+
+                      return (
+                        <div key={topic.id} className={`rounded-xl overflow-hidden transition-all ${isTopicActive ? 'bg-white shadow-sm border border-slate-100' : ''}`}>
+                          {/* Topic Header */}
+                          <button
+                            onClick={() => toggleTopic(topic.id)}
+                            className={`
+                              w-full flex items-center gap-3 p-3 text-left transition-all duration-200
+                              ${isTopicActive 
+                                ? 'text-primary-700' 
+                                : 'text-slate-600 hover:bg-white hover:shadow-sm'}
+                            `}
+                          >
+                            <div className={`p-1.5 rounded-md shrink-0 transition-colors ${isTopicActive ? 'bg-primary-50 text-primary-600' : 'bg-slate-100 text-slate-400'}`}>
+                                {React.cloneElement(topic.icon as React.ReactElement<any>, { className: "w-4 h-4" })}
+                            </div>
+                            <span className="flex-1 text-sm font-bold truncate">{topic.title}</span>
+                            {isExpanded ? (
+                                 <ChevronDown className={`w-3.5 h-3.5 shrink-0 ${isTopicActive ? 'text-primary-400' : 'text-slate-300'}`} />
+                            ) : (
+                                 <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                            )}
+                          </button>
+
+                          {/* Subtopics List */}
+                          {isExpanded && (
+                            <div className="pb-2 space-y-0.5 relative">
+                                {/* Connector Line */}
+                                <div className="absolute left-[22px] top-0 bottom-4 w-px bg-slate-200"></div>
+                                
+                                {topic.subtopics.map((sub) => {
+                                    const isSubActive = currentSubTopicId === sub.id;
+                                    return (
+                                        <button 
+                                            key={sub.id}
+                                            onClick={() => {
+                                                onSelectSubTopic(topic.id, sub.id);
+                                                onCloseMobile();
+                                            }}
+                                            className={`
+                                                relative w-[calc(100%-12px)] ml-auto flex items-center gap-3 py-2 px-3 rounded-l-lg text-left text-xs transition-colors
+                                                ${isSubActive 
+                                                    ? 'bg-primary-50 text-primary-700 font-bold border-r-2 border-primary-500' 
+                                                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}
+                                            `}
+                                        >
+                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 z-10 ${isSubActive ? 'bg-primary-500 ring-2 ring-primary-100' : 'bg-slate-300'}`}></div>
+                                            <span className="truncate leading-relaxed">{sub.title}</span>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    </div>
+                  </div>
+                );
+              })
+          )}
+        </nav>
       </aside>
     </>
   );
