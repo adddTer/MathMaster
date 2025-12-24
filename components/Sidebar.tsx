@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Topic, SubjectType } from '../types';
-import { ChevronRight, ChevronDown, BookMarked, Calculator, ScrollText, Languages, Atom, FlaskConical, Dna, BookOpen, LayoutGrid, Snowflake, Gift, PartyPopper, Sparkles } from 'lucide-react';
+import { ChevronRight, ChevronDown, BookMarked, Calculator, ScrollText, Languages, Atom, FlaskConical, Dna, GraduationCap, LayoutGrid, Snowflake, Gift, PartyPopper, Sparkles } from 'lucide-react';
 
 interface SidebarProps {
   topics: Topic[];
@@ -217,7 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="p-4 pb-2">
                 <h1 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
                     <div className="bg-primary-600 text-white p-1.5 rounded-lg shadow-sm">
-                        <BookOpen className="w-4 h-4" />
+                        <GraduationCap className="w-4 h-4" />
                     </div>
                     <span>高中智能伴学</span>
                 </h1>

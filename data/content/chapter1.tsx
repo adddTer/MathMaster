@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MathFormula } from '../../components/MathFormula';
 import { BoxSelect, Grip, List, Type, Fingerprint, Layers, Microscope } from 'lucide-react';
@@ -192,10 +193,10 @@ export const Chapter1Content = {
   ),
   section1_3: (
       <div className="space-y-8">
-         {/* 符号与定义对比 */}
+         {/* 符号与定义对比 - STRICT FIX: Removed relative/overflow-hidden/hover transitions/shadows to prevent layout thrashing */}
          <div className="grid md:grid-cols-2 gap-6">
-             <div className="flex flex-col items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm relative overflow-hidden group hover:border-blue-400 hover:shadow-md transition-all">
-                 <div className="absolute top-0 left-0 w-full h-1.5 bg-blue-500"></div>
+             <div className="flex flex-col items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                 <div className="w-full h-1.5 bg-blue-500 rounded-t-sm mb-4"></div>
                  <div className="w-16 h-16 rounded-full border-4 border-blue-100 flex items-center justify-center mb-4 bg-blue-50 text-blue-600">
                     <MathFormula tex="\cap" className="text-3xl font-bold" />
                  </div>
@@ -207,8 +208,8 @@ export const Chapter1Content = {
                  </div>
              </div>
              
-             <div className="flex flex-col items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm relative overflow-hidden group hover:border-emerald-400 hover:shadow-md transition-all">
-                 <div className="absolute top-0 left-0 w-full h-1.5 bg-emerald-500"></div>
+             <div className="flex flex-col items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                 <div className="w-full h-1.5 bg-emerald-500 rounded-t-sm mb-4"></div>
                  <div className="w-16 h-16 rounded-full border-4 border-emerald-100 flex items-center justify-center mb-4 bg-emerald-50 text-emerald-600">
                     <MathFormula tex="\cup" className="text-3xl font-bold" />
                  </div>
@@ -227,19 +228,19 @@ export const Chapter1Content = {
                  <Layers className="w-5 h-5 text-slate-500" /> 常用运算性质
              </h4>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                 <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-transparent hover:border-slate-200 transition-all">
+                 <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-transparent">
                      <span className="text-slate-600 font-medium">交集的子集关系</span>
                      <MathFormula tex="A \cap B \subseteq A" />
                  </div>
-                 <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-transparent hover:border-slate-200 transition-all">
+                 <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-transparent">
                      <span className="text-slate-600 font-medium">并集的超集关系</span>
                      <MathFormula tex="A \subseteq A \cup B" />
                  </div>
-                 <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-transparent hover:border-slate-200 transition-all">
+                 <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-transparent">
                      <span className="text-slate-600 font-medium">与空集交</span>
                      <MathFormula tex="A \cap \varnothing = \varnothing" />
                  </div>
-                 <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-transparent hover:border-slate-200 transition-all">
+                 <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-transparent">
                      <span className="text-slate-600 font-medium">与空集并</span>
                      <MathFormula tex="A \cup \varnothing = A" />
                  </div>

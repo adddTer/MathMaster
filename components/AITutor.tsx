@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import ReactDOM from 'react-dom'; // Use default import for compatibility
-import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import ReactDOM from 'react-dom'; // CRITICAL FIX: Use default import for max compatibility
+import { CheckCircle2, AlertCircle, Info, Minimize2, Maximize2 } from 'lucide-react';
 import { ChatMessage, AIConfig, AIProvider, ChatSession, ExamSession, SubjectType } from '../types';
 import { sendMessageToGeminiStream, repairMalformedJson, evaluateQuizAnswer } from '../services/geminiService';
 import { blockRegex } from './MessageRenderer';
@@ -89,7 +89,7 @@ const Notification = ({ message, type, onClose }: { message: string, type: 'succ
     };
 
     return (
-        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[99999] px-4 py-2 rounded-full border shadow-sm text-xs font-medium flex items-center gap-2 animate-in slide-in-from-top-2 fade-in duration-200 ${bgColors[type]}`}>
+        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[100000] px-4 py-2 rounded-full border shadow-sm text-xs font-medium flex items-center gap-2 animate-in slide-in-from-top-2 fade-in duration-200 ${bgColors[type]}`}>
             {type === 'success' && <CheckCircle2 className="w-3.5 h-3.5" />}
             {type === 'error' && <AlertCircle className="w-3.5 h-3.5" />}
             {type === 'info' && <Info className="w-3.5 h-3.5" />}
@@ -724,9 +724,9 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       return model ? model.name : config.modelId || 'Unknown Model';
   };
 
-  // Main UI Structure
-  const content = (
-    <div className={`flex flex-col h-full bg-slate-50 relative ${isFullscreen ? 'fixed inset-0 z-[9999] w-full h-full bg-white' : ''}`}>
+  // Main UI Content (Extracted for Portal use)
+  const renderMainContent = () => (
+    <div className={`flex flex-col h-full bg-slate-50 relative ${isFullscreen ? 'fixed inset-0 z-[99999] w-screen h-screen bg-white overflow-hidden' : ''}`}>
       {/* Notifications */}
       {notification && (
           <Notification 
@@ -810,11 +810,10 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
     </div>
   );
 
-  // If fullscreen, render into a Portal to break out of containing blocks (transforms/filters)
-  // Use ReactDOM.createPortal directly which is more robust
+  // Portal Logic: Only when fullscreen is active
   if (isFullscreen) {
-      return ReactDOM.createPortal(content, document.body);
+      return ReactDOM.createPortal(renderMainContent(), document.body);
   }
 
-  return <div className="h-full w-full">{content}</div>;
+  return <div className="h-full w-full">{renderMainContent()}</div>;
 };

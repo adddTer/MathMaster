@@ -91,7 +91,7 @@
         // Setup Tailwind Config Global
         window.tailwind = {
           config: {
-            darkMode: 'class', // CRITICAL FIX: Disable auto dark mode to prevent white text
+            darkMode: 'class', // Disable auto dark mode
             theme: {
               extend: {
                 colors: {
@@ -117,8 +117,7 @@
           }
         };
         
-        // Inject Body Classes immediately to avoid flash
-        // CRITICAL FIX: Force text-slate-900 to ensure text is dark by default
+        // Inject Body Classes
         document.documentElement.className = "h-full text-slate-900 " + themeConfig.bodyClass;
       })();
     </script>
@@ -126,7 +125,7 @@
     <!-- Tailwind via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- KaTeX CSS (Removed integrity to prevent blocking if CDN updates) -->
+    <!-- KaTeX CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
     
     <!-- JSZip for Export/Import -->
@@ -139,9 +138,7 @@
         margin: 0;
         padding: 0;
         overflow: hidden;
-        position: fixed;
-        top: 0;
-        left: 0;
+        /* Removed position: fixed; This often causes layout context issues for Portals and scrolling */
         overscroll-behavior: none;
       }
       #root {
@@ -172,7 +169,7 @@
           background: radial-gradient(circle at top left, #fef2f2, #fff1f2);
       }
 
-      /* Snow Effect (Shared) - Lower Z-Index to avoid blocking text interaction */
+      /* Snow Effect (Shared) */
       .theme-eve::before, .theme-christmas::before {
           content: '❄';
           position: fixed;
@@ -183,7 +180,7 @@
           font-size: 20px;
           animation: snowFall 15s linear infinite;
           pointer-events: none;
-          z-index: 5; /* Lowered from 9999 to be safe */
+          z-index: 5;
           text-shadow: 
               5vw 10vh 2px rgba(167, 243, 208, 0.5), 
               15vw 25vh 2px rgba(167, 243, 208, 0.5), 
