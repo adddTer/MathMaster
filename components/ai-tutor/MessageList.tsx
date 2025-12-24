@@ -65,7 +65,7 @@ export const MessageList: React.FC<MessageListProps> = ({
             ref={scrollRef}
             className={`flex-1 overflow-y-auto ${isFullscreen ? 'bg-white' : 'bg-slate-50'} p-4 md:p-6 scroll-smooth`}
         >
-            <div className={`mx-auto space-y-8 ${isFullscreen ? 'max-w-4xl' : 'max-w-none'}`}>
+            <div className={`mx-auto space-y-8 ${isFullscreen ? 'max-w-5xl' : 'max-w-none'}`}>
                 {messages.map((msg, idx) => {
                     // Skip empty loading placeholder if it's the very last one and empty
                     if (isLoading && idx === messages.length - 1 && msg.role === 'model' && !msg.text) {
@@ -80,6 +80,28 @@ export const MessageList: React.FC<MessageListProps> = ({
                     const agentName = msg.sender?.name || (isUser ? '我' : 'AI 助手');
                     const agentRole = msg.sender?.role || (isUser ? 'user' : 'model');
 
+                    // --- Fullscreen "Stream" Layout for AI ---
+                    if (isFullscreen && !isUser) {
+                        return (
+                            <div key={idx} className="group py-4">
+                                <div className="flex items-center gap-3 mb-4 px-1">
+                                    <AgentAvatar role={agentRole} name={agentName} />
+                                    <span className="font-bold text-slate-700 text-sm">{agentName}</span>
+                                </div>
+                                <div className="prose prose-slate max-w-none prose-p:leading-relaxed prose-headings:font-bold prose-headings:text-slate-800 text-base pl-11">
+                                    <MessageRenderer 
+                                        content={msg.text} 
+                                        onInteract={(action, payload, blockIdx) => onInteract(action, payload, blockIdx, idx)}
+                                        savedState={msg.componentState}
+                                        aiConfig={aiConfig}
+                                        availableModels={availableModels}
+                                    />
+                                </div>
+                            </div>
+                        );
+                    }
+
+                    // --- Standard Chat Layout ---
                     return (
                         <div key={idx} className={`flex gap-4 ${isUser ? 'flex-row-reverse' : 'items-start'} group`}>
                             {/* Avatar */}
@@ -87,7 +109,7 @@ export const MessageList: React.FC<MessageListProps> = ({
 
                             {/* Content Area */}
                             <div className={`flex flex-col max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
-                                {/* Name Label (Only for non-user, or if user in a group chat context) */}
+                                {/* Name Label */}
                                 <span className="text-xs text-slate-400 mb-1.5 px-1">
                                     {agentName}
                                 </span>

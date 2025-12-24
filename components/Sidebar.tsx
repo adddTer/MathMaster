@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Topic, SubjectType } from '../types';
-import { ChevronRight, ChevronDown, BookMarked, Calculator, ScrollText, Languages, Atom, FlaskConical, Dna, Library, LayoutGrid } from 'lucide-react';
+import { ChevronRight, ChevronDown, BookMarked, Calculator, ScrollText, Languages, Atom, FlaskConical, Dna, BookOpen, LayoutGrid, Snowflake, Gift, PartyPopper, Sparkles } from 'lucide-react';
 
 interface SidebarProps {
   topics: Topic[];
@@ -77,6 +77,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [expandedTopicIds, setExpandedTopicIds] = useState<Set<string>>(new Set([currentTopicId]));
   const [activeModule, setActiveModule] = useState<string>('全部');
+  const [theme, setTheme] = useState<any>(null);
+
+  // Load theme from global window object
+  useEffect(() => {
+      // @ts-ignore
+      if (window.curriculumTheme) {
+          // @ts-ignore
+          setTheme(window.curriculumTheme);
+      }
+  }, []);
 
   // Reset module filter when subject changes
   useEffect(() => {
@@ -152,6 +162,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
       );
   };
 
+  // Theme Icon logic
+  const ThemeBadge = () => {
+      if (!theme || theme.name === 'default') return null;
+      
+      let Icon = Sparkles;
+      let text = theme.label;
+      let styleClass = "bg-primary-50 text-primary-600 border-primary-200";
+
+      if (theme.name === 'eve') {
+          Icon = Gift;
+          styleClass = "bg-emerald-100 text-emerald-700 border-emerald-200";
+      } else if (theme.name === 'christmas') {
+          Icon = Snowflake;
+          styleClass = "bg-red-100 text-red-700 border-red-200";
+      } else if (theme.name === 'newyear') {
+          Icon = PartyPopper;
+          styleClass = "bg-rose-100 text-rose-700 border-rose-200";
+      } else if (theme.name === 'spring_festival') {
+          Icon = PartyPopper; 
+          styleClass = "bg-red-50 text-red-800 border-red-200 shadow-sm";
+      }
+
+      return (
+          <div className={`mt-3 px-3 py-2 rounded-lg border ${styleClass} flex items-center justify-between shadow-sm animate-in slide-in-from-left-2`}>
+              <span className="text-xs font-bold flex items-center gap-1.5">
+                  <Icon className="w-3.5 h-3.5" />
+                  {text}快乐!
+              </span>
+          </div>
+      );
+  };
+
   return (
     <>
       {/* Mobile Overlay */}
@@ -162,26 +204,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
 
-      {/* Sidebar Content */}
+      {/* Sidebar Content - Make background semi-transparent to show global theme */}
       <aside 
         className={`
-          fixed md:static top-0 h-full w-80 bg-[#f8fafc] border-r border-slate-200 z-50 md:z-auto
+          fixed md:static top-0 h-full w-80 bg-white/80 backdrop-blur-md border-r border-slate-200 z-50 md:z-auto
           transition-transform duration-300 ease-in-out flex flex-col shrink-0
           ${isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0 md:shadow-none'}
         `}
       >
         {/* Header Section */}
-        <div className="flex-shrink-0 bg-white border-b border-slate-100 shadow-[0_4px_20px_-12px_rgba(0,0,0,0.1)] z-10">
+        <div className="flex-shrink-0 border-b border-slate-100 shadow-[0_4px_20px_-12px_rgba(0,0,0,0.1)] z-10 bg-white/50">
             <div className="p-4 pb-2">
                 <h1 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
-                    <div className="bg-primary-600 text-white p-1.5 rounded-lg">
-                        <Library className="w-4 h-4" />
+                    <div className="bg-primary-600 text-white p-1.5 rounded-lg shadow-sm">
+                        <BookOpen className="w-4 h-4" />
                     </div>
                     <span>高中智能伴学</span>
                 </h1>
                 
                 {/* Subject Grid */}
-                <div className="bg-slate-100/80 p-1.5 rounded-2xl grid grid-cols-3 gap-1 mb-4">
+                <div className="bg-slate-100/80 p-1.5 rounded-2xl grid grid-cols-3 gap-1 mb-2">
                     <SubjectBtn type="math" />
                     <SubjectBtn type="chinese" />
                     <SubjectBtn type="english" />
@@ -189,10 +231,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <SubjectBtn type="chemistry" />
                     <SubjectBtn type="biology" />
                 </div>
+
+                <ThemeBadge />
             </div>
 
             {/* Module Filter Tabs */}
-            <div className="px-4 pb-0 overflow-x-auto scrollbar-hide">
+            <div className="px-4 pb-0 overflow-x-auto scrollbar-hide mt-2">
                 <div className="flex gap-2 pb-3 min-w-max">
                     {MODULES[currentSubject].map((mod) => (
                         <button
@@ -232,8 +276,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 const categoryTopics = groupedTopics.groups[category];
                 if (!categoryTopics) return null;
 
-                // Smart Merging: If a category has only one topic, and (it's a Chapter OR name contains topic), we merge.
-                // This handles "第六章 基本初等函数" (Category) vs "幂指对函数" (Topic) by matching "第" prefix.
                 const singleTopic = categoryTopics.length === 1 ? categoryTopics[0] : null;
                 const isRedundant = singleTopic && (category.includes(singleTopic.title) || category.startsWith('第'));
 
@@ -251,7 +293,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {categoryTopics.map((topic) => {
                       const isExpanded = expandedTopicIds.has(topic.id);
                       const isTopicActive = currentTopicId === topic.id;
-                      // If merged, use the Category Name (e.g. "第六章 基本初等函数") as the button title
                       const displayTitle = (isRedundant && singleTopic?.id === topic.id) ? category : topic.title;
 
                       return (
@@ -263,7 +304,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               w-full flex items-center gap-3 p-3 text-left transition-all duration-200
                               ${isTopicActive 
                                 ? 'text-primary-700' 
-                                : 'text-slate-600 hover:bg-white hover:shadow-sm'}
+                                : 'text-slate-600 hover:bg-white/60 hover:shadow-sm'}
                             `}
                           >
                             <div className={`p-1.5 rounded-md shrink-0 transition-colors ${isTopicActive ? 'bg-primary-50 text-primary-600' : 'bg-slate-100 text-slate-400'}`}>

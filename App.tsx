@@ -257,8 +257,9 @@ const App: React.FC = () => {
 
   const isEssayTool = currentSubTopic?.id === 'ai-essay-generator';
 
+  // Make main container transparent to let body background (holiday theme) show through
   return (
-    <div className="fixed inset-0 flex bg-slate-50 font-sans overflow-hidden">
+    <div className="fixed inset-0 flex font-sans overflow-hidden">
       <Sidebar 
         topics={currentTopicsData}
         currentSubject={currentSubject}
@@ -270,8 +271,8 @@ const App: React.FC = () => {
         onCloseMobile={() => setIsSidebarOpen(false)}
       />
 
-      <main className="flex-1 flex flex-col min-w-0 min-h-0 relative">
-        <header className="xl:hidden bg-white border-b border-slate-200 px-4 h-16 flex justify-between items-center z-10 shrink-0 shadow-sm">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 relative bg-white/50">
+        <header className="xl:hidden bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 h-16 flex justify-between items-center z-10 shrink-0 shadow-sm">
           <div className="flex items-center gap-3 overflow-hidden">
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"><Menu className="w-6 h-6" /></button>
             <div className="flex flex-col">
@@ -347,7 +348,7 @@ const App: React.FC = () => {
             )}
           </div>
           {!isEssayTool && (
-            <aside className="hidden xl:block w-96 border-l border-slate-200 bg-white h-full shrink-0 shadow-sm z-20">
+            <aside className="hidden xl:block w-96 border-l border-slate-200 bg-white/80 backdrop-blur-md h-full shrink-0 shadow-sm z-20">
                 <div className="h-full p-0">
                     <AITutor currentContext={`${currentTopic?.title || '综合'} - ${currentSubTopic?.title || '学习'}`} initialQuery={initialAIQuery} onClearInitialQuery={() => setInitialAIQuery('')} onNavigate={handleNavigate} />
                 </div>

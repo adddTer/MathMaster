@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import ReactDOM from 'react-dom'; // Use default import for compatibility
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { ChatMessage, AIConfig, AIProvider, ChatSession, ExamSession, SubjectType } from '../types';
 import { sendMessageToGeminiStream, repairMalformedJson, evaluateQuizAnswer } from '../services/geminiService';
@@ -88,7 +89,7 @@ const Notification = ({ message, type, onClose }: { message: string, type: 'succ
     };
 
     return (
-        <div className={`absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full border shadow-sm text-xs font-medium flex items-center gap-2 animate-in slide-in-from-top-2 fade-in duration-200 ${bgColors[type]}`}>
+        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[99999] px-4 py-2 rounded-full border shadow-sm text-xs font-medium flex items-center gap-2 animate-in slide-in-from-top-2 fade-in duration-200 ${bgColors[type]}`}>
             {type === 'success' && <CheckCircle2 className="w-3.5 h-3.5" />}
             {type === 'error' && <AlertCircle className="w-3.5 h-3.5" />}
             {type === 'info' && <Info className="w-3.5 h-3.5" />}
@@ -196,7 +197,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
         if ((savedDebug === 'true' || useEnvKey) && SYSTEM_ENV_KEY) {
             if (parsed.provider === 'gemini' && parsed.modelId !== 'gemini-3-pro-preview') {
                 parsed.modelId = 'gemini-3-pro-preview';
-                console.log("Dev Mode: Auto-switched to Gemini 3 Pro");
             }
         }
         
@@ -303,7 +303,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       });
   };
 
-  // --- Import / Export Logic (Keep logic here, trigger from HistoryView) ---
+  // --- Import / Export Logic ---
 
   const handleExportSingle = (data: ChatSession | ExamSession, type: 'session' | 'exam', title: string) => {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
@@ -443,7 +443,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       });
   };
 
-  // Handle Initial Query from props
   useEffect(() => {
       if (initialQuery) {
           setInput(initialQuery);
@@ -454,13 +453,12 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       }
   }, [initialQuery]);
 
-  // Get effective config for usage (using real config state)
   const getEffectiveConfig = () => {
       if (useEnvKey && SYSTEM_ENV_KEY) {
           return {
               ...config,
               apiKey: SYSTEM_ENV_KEY,
-              modelId: config.modelId || 'gemini-3-pro-preview' // Enforce robust default in Dev
+              modelId: config.modelId || 'gemini-3-pro-preview' 
           };
       }
       return config;
@@ -589,18 +587,14 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       return match ? `:::${match[1]}` : ':::';
   };
 
-  // Handle Exam Interactions
   const handleExamCreated = (exam: ExamSession) => {
       let newTitle = exam.config.title;
       let count = 1;
-      
       while (exams.some(e => e.config.title === newTitle)) {
           newTitle = `${exam.config.title} (${count})`;
           count++;
       }
-      
       const newExam = { ...exam, config: { ...exam.config, title: newTitle } };
-      
       setExams(prev => [newExam, ...prev]);
       setActiveExam(newExam);
       return newExam;
@@ -614,9 +608,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
   const handleComponentInteract = async (action: string, payload?: any, blockIndex?: number, msgIndex?: number) => {
       if (action === 'apply_suggestion') {
           setInput(payload.text);
-          if (inputRef.current) {
-              inputRef.current.focus();
-          }
+          if (inputRef.current) inputRef.current.focus();
           return;
       }
 
@@ -732,71 +724,9 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       return model ? model.name : config.modelId || 'Unknown Model';
   };
 
-  const containerClass = isFullscreen 
-    ? "fixed inset-0 z-50 bg-slate-50 flex flex-col h-full w-full" 
-    : "flex flex-col h-full bg-slate-50 relative";
-
-  // --- Render Views ---
-
-  // Exam Runner Overlay
-  if (activeExam) {
-      return (
-          <ExamRunner 
-              exam={activeExam} 
-              aiConfig={getEffectiveConfig()}
-              onClose={() => setActiveExam(null)}
-              onSave={handleSaveExam}
-          />
-      );
-  }
-
-  // Settings View
-  if (showSettings) {
-      return (
-          <div className={containerClass}>
-              <SettingsView 
-                  config={config}
-                  onSave={handleConfigSave}
-                  onClose={() => setShowSettings(false)}
-                  availableModels={availableModels}
-                  onUpdateModels={handleUpdateModels}
-                  systemEnvKey={SYSTEM_ENV_KEY}
-                  useEnvKey={useEnvKey}
-                  onToggleDebugMode={handleToggleDebugMode}
-              />
-          </div>
-      );
-  }
-
-  // History List View
-  if (isHistoryView) {
-      return (
-          <div className={containerClass}>
-              <HistoryView 
-                  sessions={sessions}
-                  exams={exams}
-                  currentSessionId={currentSessionId}
-                  onSelectSession={(id) => { setCurrentSessionId(id); setIsHistoryView(false); }}
-                  onSelectExam={(ex) => setActiveExam(ex)}
-                  onClose={() => setIsHistoryView(false)}
-                  onNewChat={handleNewChat}
-                  onImportZip={handleImportZip}
-                  onExportAll={() => generateZipExport(sessions)}
-                  onExportBatch={(ids) => generateZipExport(sessions.filter(s => ids.includes(s.id)))}
-                  onExportSingle={handleExportSingle}
-                  onDelete={handleDelete}
-                  onRenameSession={handleRenameSession}
-                  onRenameExam={handleRenameExam}
-                  onTogglePin={handleTogglePin}
-              />
-          </div>
-      );
-  }
-
-  // --- Main Chat Interface ---
-
-  return (
-    <div className={containerClass}>
+  // Main UI Structure
+  const content = (
+    <div className={`flex flex-col h-full bg-slate-50 relative ${isFullscreen ? 'fixed inset-0 z-[9999] w-full h-full bg-white' : ''}`}>
       {/* Notifications */}
       {notification && (
           <Notification 
@@ -806,35 +736,85 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
           />
       )}
 
-      <ChatHeader 
-          title={currentSession?.title}
-          modelName={getCurrentModelName()}
-          isConnected={isConnected}
-          onHistoryClick={() => setIsHistoryView(true)}
-          onNewChatClick={handleNewChat}
-          onFullscreenClick={() => setIsFullscreen(!isFullscreen)}
-          isFullscreen={isFullscreen}
-          onSettingsClick={() => setShowSettings(true)}
-      />
+      {/* Conditional Rendering of Views */}
+      {activeExam ? (
+          <ExamRunner 
+              exam={activeExam} 
+              aiConfig={getEffectiveConfig()}
+              onClose={() => setActiveExam(null)}
+              onSave={handleSaveExam}
+          />
+      ) : showSettings ? (
+          <SettingsView 
+              config={config}
+              onSave={handleConfigSave}
+              onClose={() => setShowSettings(false)}
+              availableModels={availableModels}
+              onUpdateModels={handleUpdateModels}
+              systemEnvKey={SYSTEM_ENV_KEY}
+              useEnvKey={useEnvKey}
+              onToggleDebugMode={handleToggleDebugMode}
+          />
+      ) : isHistoryView ? (
+          <HistoryView 
+              sessions={sessions}
+              exams={exams}
+              currentSessionId={currentSessionId}
+              onSelectSession={(id) => { setCurrentSessionId(id); setIsHistoryView(false); }}
+              onSelectExam={(ex) => setActiveExam(ex)}
+              onClose={() => setIsHistoryView(false)}
+              onNewChat={handleNewChat}
+              onImportZip={handleImportZip}
+              onExportAll={() => generateZipExport(sessions)}
+              onExportBatch={(ids) => generateZipExport(sessions.filter(s => ids.includes(s.id)))}
+              onExportSingle={handleExportSingle}
+              onDelete={handleDelete}
+              onRenameSession={handleRenameSession}
+              onRenameExam={handleRenameExam}
+              onTogglePin={handleTogglePin}
+          />
+      ) : (
+          /* Main Chat Interface */
+          <>
+              <ChatHeader 
+                  title={currentSession?.title}
+                  modelName={getCurrentModelName()}
+                  isConnected={isConnected}
+                  onHistoryClick={() => setIsHistoryView(true)}
+                  onNewChatClick={handleNewChat}
+                  onFullscreenClick={() => setIsFullscreen(!isFullscreen)}
+                  isFullscreen={isFullscreen}
+                  onSettingsClick={() => setShowSettings(true)}
+              />
 
-      <MessageList 
-          messages={messages}
-          isLoading={isLoading}
-          isFullscreen={isFullscreen}
-          scrollRef={scrollRef}
-          onInteract={handleComponentInteract}
-          aiConfig={getEffectiveConfig()}
-          availableModels={availableModels}
-      />
+              <MessageList 
+                  messages={messages}
+                  isLoading={isLoading}
+                  isFullscreen={isFullscreen}
+                  scrollRef={scrollRef}
+                  onInteract={handleComponentInteract}
+                  aiConfig={getEffectiveConfig()}
+                  availableModels={availableModels}
+              />
 
-      <ChatInput 
-          input={input}
-          setInput={setInput}
-          onSend={() => handleSend()}
-          isLoading={isLoading}
-          isConnected={isConnected}
-          inputRef={inputRef}
-      />
+              <ChatInput 
+                  input={input}
+                  setInput={setInput}
+                  onSend={() => handleSend()}
+                  isLoading={isLoading}
+                  isConnected={isConnected}
+                  inputRef={inputRef}
+              />
+          </>
+      )}
     </div>
   );
+
+  // If fullscreen, render into a Portal to break out of containing blocks (transforms/filters)
+  // Use ReactDOM.createPortal directly which is more robust
+  if (isFullscreen) {
+      return ReactDOM.createPortal(content, document.body);
+  }
+
+  return <div className="h-full w-full">{content}</div>;
 };

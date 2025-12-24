@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import katex from 'katex';
 
@@ -11,39 +12,35 @@ export const MathFormula: React.FC<MathFormulaProps> = ({ tex, block = false, cl
   const [html, setHtml] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!katex) {
+        console.warn("KaTeX is not loaded");
+        setHtml(tex); // Fallback
+        return;
+    }
     try {
-        // Intercept console.warn specifically for the quirks mode warning
-        // This is necessary because some embedding environments (like sandboxes or iframes)
-        // force quirks mode regardless of the DOCTYPE, causing noisy warnings.
-        const originalWarn = console.warn;
-        console.warn = (...args) => {
-            if (args[0] && typeof args[0] === 'string' && args[0].includes('quirks mode')) {
-                return;
-            }
-            originalWarn.apply(console, args);
-        };
-
         const rendered = katex.renderToString(tex, {
           throwOnError: false,
           displayMode: block,
           strict: false,
           trust: true,
-          output: 'html' // Force HTML output to avoid MathML issues in quirks mode
+          output: 'html'
         });
-        
-        // Restore console.warn
-        console.warn = originalWarn;
         
         setHtml(rendered);
     } catch (e) {
         console.error("KaTeX render error:", e);
-        setHtml(null);
+        setHtml(tex); // Fallback
     }
   }, [tex, block]);
 
   // Fallback to text if rendering failed
   if (html === null) {
     return <span className={`${block ? 'block my-2' : ''} ${className}`}>{tex}</span>;
+  }
+
+  // If fallback triggered (html === tex), render as text
+  if (html === tex) {
+      return <span className={`${block ? 'block my-2' : ''} ${className} font-mono text-xs text-red-400 bg-red-50 p-1 rounded`}>{tex}</span>;
   }
 
   return (

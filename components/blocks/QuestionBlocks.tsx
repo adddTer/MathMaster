@@ -9,7 +9,10 @@ export const ChoiceBlock: React.FC<{ content: string; onInteract?: (a:string, p?
     const [selected, setSelected] = useState<number | null>(savedState?.selected ?? null);
     const [hasSubmitted, setHasSubmitted] = useState(savedState?.hasSubmitted ?? false);
     if (!data) return <ErrorBlock content={rawJson} errorMsg={error || "Parse error"} onInteract={onInteract} savedState={savedState} />;
-    const correctIndex = data.answer ? (data.answer.trim().toUpperCase().charCodeAt(0) - 65) : -1;
+    
+    // Safety check for data.answer being non-string
+    const correctIndex = data.answer ? (String(data.answer).trim().toUpperCase().charCodeAt(0) - 65) : -1;
+    
     const handleSelect = (idx: number) => {
         if (hasSubmitted) return;
         setSelected(idx);

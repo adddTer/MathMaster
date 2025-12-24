@@ -4,29 +4,134 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>高中数学智能伴学系统</title>
-    <!-- Tailwind via CDN for simplicity -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Configure Tailwind BEFORE loading the script -->
     <script>
-      window.tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              primary: {
-                50: '#eff6ff',
-                100: '#dbeafe',
-                500: '#3b82f6',
-                600: '#2563eb',
-                700: '#1d4ed8',
+      (function() {
+        // Theme System Logic
+        var d = new Date();
+        var year = d.getFullYear();
+        var m = d.getMonth() + 1;
+        var date = d.getDate();
+        
+        // Default Theme
+        var themeConfig = {
+            name: "default",
+            label: "默认",
+            icon: "",
+            primary: {
+                50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa',
+                500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a', 950: '#172554',
+            },
+            bodyClass: "bg-slate-50"
+        };
+
+        // Determine Spring Festival Range
+        var isSpringFestival = false;
+        if (year === 2025 && ((m === 1 && date >= 28) || (m === 2 && date <= 12))) isSpringFestival = true;
+        if (year === 2026 && ((m === 2 && date >= 16) || (m === 3 && date <= 3))) isSpringFestival = true;
+        if (year === 2027 && ((m === 2 && date >= 5 && date <= 20))) isSpringFestival = true;
+
+        // 12/24: Christmas Eve
+        if (m === 12 && date === 24) {
+            themeConfig = {
+                name: "eve",
+                label: "平安夜",
+                icon: "",
+                primary: {
+                    50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399',
+                    500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b', 950: '#022c22',
+                },
+                bodyClass: "theme-eve"
+            };
+        }
+        // 12/25: Christmas
+        else if (m === 12 && date === 25) {
+            themeConfig = {
+                name: "christmas",
+                label: "圣诞节",
+                icon: "",
+                primary: {
+                    50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#fca5a5', 400: '#f87171',
+                    500: '#ef4444', 600: '#dc2626', 700: '#b91c1c', 800: '#991b1b', 900: '#7f1d1d', 950: '#450a0a',
+                },
+                bodyClass: "theme-christmas"
+            };
+        }
+        // 1/1: New Year
+        else if (m === 1 && date === 1) {
+            themeConfig = {
+                name: "newyear",
+                label: "元旦",
+                icon: "",
+                primary: {
+                    50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 300: '#fda4af', 400: '#fb7185',
+                    500: '#f43f5e', 600: '#e11d48', 700: '#be123c', 800: '#9f1239', 900: '#881337', 950: '#4c0519',
+                },
+                bodyClass: "theme-newyear"
+            };
+        }
+        // Spring Festival
+        else if (isSpringFestival) {
+             themeConfig = {
+                name: "spring_festival",
+                label: "春节",
+                icon: "",
+                primary: {
+                    50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 300: '#fda4af', 400: '#fb7185',
+                    500: '#e11d48', 600: '#be123c', 700: '#9f1239', 800: '#881337', 900: '#701a2e', 950: '#4c0519',
+                },
+                bodyClass: "theme-spring"
+            };
+        }
+
+        // Expose to Global
+        window.curriculumTheme = themeConfig;
+        
+        // Setup Tailwind Config Global
+        window.tailwind = {
+          config: {
+            darkMode: 'class', // CRITICAL FIX: Disable auto dark mode to prevent white text
+            theme: {
+              extend: {
+                colors: {
+                  primary: themeConfig.primary,
+                },
+                animation: {
+                    'snow-fall': 'snowFall 10s linear infinite',
+                    'shimmer': 'shimmer 2s linear infinite',
+                },
+                keyframes: {
+                    snowFall: {
+                        '0%': { transform: 'translateY(-10vh)', opacity: '0' },
+                        '10%': { opacity: '1' },
+                        '100%': { transform: 'translateY(110vh)', opacity: '0.3' },
+                    },
+                    shimmer: {
+                        '0%': { backgroundPosition: '100% 0' },
+                        '100%': { backgroundPosition: '-100% 0' },
+                    }
+                }
               }
             }
           }
-        }
-      }
+        };
+        
+        // Inject Body Classes immediately to avoid flash
+        // CRITICAL FIX: Force text-slate-900 to ensure text is dark by default
+        document.documentElement.className = "h-full text-slate-900 " + themeConfig.bodyClass;
+      })();
     </script>
-    <!-- KaTeX CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
+
+    <!-- Tailwind via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- KaTeX CSS (Removed integrity to prevent blocking if CDN updates) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+    
     <!-- JSZip for Export/Import -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
     <style>
       html, body {
         height: 100%;
@@ -48,7 +153,7 @@
         height: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #f1f5f9; 
+        background: transparent; 
       }
       ::-webkit-scrollbar-thumb {
         background: #cbd5e1; 
@@ -56,6 +161,91 @@
       }
       ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8; 
+      }
+
+      /* --- Theme: Christmas Eve --- */
+      .theme-eve {
+          background: linear-gradient(to bottom right, #ecfdf5, #d1fae5);
+      }
+      /* --- Theme: Christmas --- */
+      .theme-christmas {
+          background: radial-gradient(circle at top left, #fef2f2, #fff1f2);
+      }
+
+      /* Snow Effect (Shared) - Lower Z-Index to avoid blocking text interaction */
+      .theme-eve::before, .theme-christmas::before {
+          content: '❄';
+          position: fixed;
+          top: -2vh;
+          left: 0;
+          right: 0;
+          color: rgba(167, 243, 208, 0.6); 
+          font-size: 20px;
+          animation: snowFall 15s linear infinite;
+          pointer-events: none;
+          z-index: 5; /* Lowered from 9999 to be safe */
+          text-shadow: 
+              5vw 10vh 2px rgba(167, 243, 208, 0.5), 
+              15vw 25vh 2px rgba(167, 243, 208, 0.5), 
+              25vw 5vh 2px rgba(167, 243, 208, 0.5), 
+              35vw 30vh 2px rgba(167, 243, 208, 0.5), 
+              45vw 15vh 2px rgba(167, 243, 208, 0.5), 
+              55vw 35vh 2px rgba(167, 243, 208, 0.5), 
+              65vw 10vh 2px rgba(167, 243, 208, 0.5), 
+              75vw 25vh 2px rgba(167, 243, 208, 0.5), 
+              85vw 5vh 2px rgba(167, 243, 208, 0.5), 
+              95vw 30vh 2px rgba(167, 243, 208, 0.5);
+      }
+      .theme-christmas::before {
+          color: rgba(254, 202, 202, 0.6);
+          text-shadow: 
+              5vw 10vh 2px rgba(254, 202, 202, 0.5), 
+              15vw 25vh 2px rgba(254, 202, 202, 0.5), 
+              25vw 5vh 2px rgba(254, 202, 202, 0.5), 
+              35vw 30vh 2px rgba(254, 202, 202, 0.5), 
+              45vw 15vh 2px rgba(254, 202, 202, 0.5), 
+              55vw 35vh 2px rgba(254, 202, 202, 0.5), 
+              65vw 10vh 2px rgba(254, 202, 202, 0.5), 
+              75vw 25vh 2px rgba(254, 202, 202, 0.5), 
+              85vw 5vh 2px rgba(254, 202, 202, 0.5), 
+              95vw 30vh 2px rgba(254, 202, 202, 0.5);
+      }
+
+      /* --- Theme: New Year --- */
+      .theme-newyear {
+          background: linear-gradient(135deg, #fff1f2 0%, #fff7ed 100%);
+      }
+      .theme-newyear::before {
+          content: '';
+          position: fixed;
+          top: 0; left: 0; width: 100%; height: 6px;
+          background: linear-gradient(90deg, #f43f5e, #fbbf24, #f43f5e, #fbbf24);
+          background-size: 200% 100%;
+          animation: shimmer 3s linear infinite;
+          z-index: 50;
+      }
+
+      /* --- Theme: Spring Festival --- */
+      .theme-spring {
+          background: radial-gradient(circle at center, #fff1f2 0%, #ffe4e6 100%);
+      }
+      .theme-spring::before {
+          content: '';
+          position: fixed;
+          top: 0; left: 0; width: 100%; height: 10px;
+          background-image: repeating-linear-gradient(45deg, #be123c 0, #be123c 10px, #fbbf24 10px, #fbbf24 20px);
+          z-index: 50;
+          box-shadow: 0 2px 10px rgba(190, 18, 60, 0.2);
+      }
+
+      @keyframes snowFall {
+          0% { transform: translateY(-10vh); opacity: 0; }
+          10% { opacity: 1; }
+          100% { transform: translateY(110vh); opacity: 0.3; }
+      }
+      @keyframes shimmer {
+          0% { background-position: 100% 0; }
+          100% { background-position: -100% 0; }
       }
     </style>
 <script type="importmap">
@@ -68,12 +258,13 @@
     "vite": "https://esm.sh/vite@^7.3.0",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
     "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "katex": "https://esm.sh/katex@^0.16.27"
+    "katex": "https://esm.sh/katex@^0.16.9",
+    "react-dom": "https://esm.sh/react-dom@^19.2.3"
   }
 }
 </script>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased">
+<body class="antialiased text-slate-900">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>

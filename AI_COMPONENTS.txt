@@ -1,0 +1,162 @@
+
+# AI Functional Components Registry
+# Copy these definitions into the SYSTEM_PROMPT in services/prompts.ts
+
+**交互式组件库**：
+请在讲解过程中积极使用以下组件。
+**规则：组件代码块必须独占一行，以 ::: 开头和结尾。JSON 内容必须是标准合法 JSON。**
+
+1) **核心要点 (Keypoint)**
+:::keypoint
+标题
+---
+内容 (支持 LaTeX)
+:::
+
+2) **单选题 (Choice)**
+:::choice
+{
+  "question": "题目描述",
+  "options": ["选项A", "选项B", "选项C", "选项D"],
+  "answer": "A",
+  "explanation": "解析"
+}
+:::
+
+3) **填空题 (Fill-in)**
+:::fill_in
+{
+  "question": "题目",
+  "answer": "答案",
+  "explanation": "解析"
+}
+:::
+
+4) **判断题 (True/False)**
+:::true_false
+{
+  "question": "题目",
+  "answer": true,
+  "explanation": "解析"
+}
+:::
+
+5) **主观题 (Quiz)**
+:::quiz
+{
+  "question": "题目",
+  "answer": "参考答案",
+  "explanation": "解析"
+}
+:::
+
+6) **函数图像 (Plot)**
+:::plot
+{
+  "functions": [
+    { "expr": "x^2", "color": "blue", "label": "y=x^2" }
+  ],
+  "xDomain": [-5, 5],
+  "yDomain": [-5, 5]
+}
+:::
+
+7) **立体几何 (Solid Geometry)**
+:::solid_geometry
+{
+  "type": "cube", 
+  "label": "立方体"
+}
+:::
+(type可选: cube, tetrahedron, prism, pyramid, cylinder_wire)
+
+8) **复平面 (Complex Plane)**
+:::complex_plane
+{
+  "points": [{ "x": 3, "y": 4, "label": "3+4i", "showVector": true }],
+  "range": 5
+}
+:::
+
+9) **易错点纠正 (Correction)**
+:::correction
+{
+  "wrong_solution": "错误解法",
+  "correct_solution": "正确解法",
+  "error_point": "错因",
+  "explanation": "解析"
+}
+:::
+
+10) **解题步骤 (Step Solver)**
+:::step_solver
+{
+  "title": "题目",
+  "steps": [
+    { "title": "第一步", "content": "..." },
+    { "title": "第二步", "content": "..." }
+  ]
+}
+:::
+
+11) **对比表格 (Comparison)**
+:::comparison
+{
+  "title": "对比表",
+  "headers": ["列1", "列2"],
+  "rows": [["A1", "A2"], ["B1", "B2"]]
+}
+:::
+
+12) **统计图表 (Chart)**
+:::chart
+{
+  "type": "bar",
+  "title": "标题",
+  "xLabel": "X",
+  "yLabel": "Y",
+  "data": [{ "label": "A", "value": 10 }]
+}
+:::
+
+13) **检查清单 (Checklist)**
+:::checklist
+{
+  "title": "自查清单",
+  "items": ["检查项1", "检查项2"]
+}
+:::
+
+14) **技巧提示 (Tips)**
+:::tips
+{
+  "title": "技巧",
+  "content": "内容"
+}
+:::
+
+15) **推荐追问 (Suggestions)**
+:::suggestions
+{
+  "items": ["追问1", "追问2"]
+}
+:::
+
+16) **试卷生成配置 (Exam Config)**
+:::exam_config
+{
+  "topic": "考察范围",
+  "title": "试卷标题",
+  "questionCount": 5,
+  "difficultyDistribution": "描述",
+  "totalScore": 100
+}
+:::
+
+17) **作文工具入口 (Essay Generator)**
+:::essay_generator
+{
+  "title": "交互式作文生成",
+  "description": "点击打开多智能体写作辅助工具"
+}
+:::

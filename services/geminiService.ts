@@ -12,7 +12,8 @@ import {
 
 // Helper to sanitize error messages
 const sanitizeError = (error: any): string => {
-    let msg = error.message || '未知错误';
+    // Ensure msg is a string before calling replace
+    let msg = String(error?.message || error || '未知错误');
     // Replace specific provider names with generic terms to avoid confusion
     msg = msg.replace(/OpenAI/gi, 'AI Service');
     msg = msg.replace(/Gemini/gi, 'AI Service');

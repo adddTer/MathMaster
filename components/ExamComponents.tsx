@@ -540,7 +540,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center gap-2">
                                     <span className="px-2 py-1 bg-slate-100 rounded text-xs font-bold text-slate-500 uppercase">
-                                        {currentQuestion.type.replace('_', ' ')}
+                                        {(currentQuestion.type || 'unknown').replace('_', ' ')}
                                     </span>
                                     <span className="px-2 py-1 bg-amber-50 rounded text-xs font-bold text-amber-600 uppercase">
                                         {currentQuestion.score} 分

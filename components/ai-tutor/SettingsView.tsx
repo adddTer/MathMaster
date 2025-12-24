@@ -297,9 +297,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 </div>
                                 <button 
                                     onClick={handleApplyDeepSeekFix}
-                                    className="font-bold underline hover:text-blue-900 ml-3 whitespace-nowrap"
+                                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm flex items-center gap-1 ml-3 whitespace-nowrap"
                                 >
-                                    一键修复
+                                    <Wrench className="w-3 h-3" /> 一键修复
                                 </button>
                             </div>
                         )}
