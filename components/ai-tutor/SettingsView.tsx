@@ -215,7 +215,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 onClick={() => handleProviderChange('gemini')}
                                 className={`p-3 rounded-lg border text-sm font-medium flex flex-col items-center gap-2 transition-all ${
                                     draftConfig.provider === 'gemini' 
-                                    ? 'bg-primary-50 border-primary-500 text-primary-700 ring-1 ring-primary-500' 
+                                    ? 'bg-indigo-50 border-indigo-500 text-indigo-700 ring-1 ring-indigo-500' 
                                     : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                                 }`}
                             >
@@ -253,7 +253,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             value={useEnvKey ? 'SYSTEM_ENV_KEY_ACTIVE' : draftConfig.apiKey}
                             onChange={(e) => setDraftConfig({...draftConfig, apiKey: e.target.value})}
                             placeholder={draftConfig.provider === 'gemini' ? "AIzaSy..." : "sk-..."}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                             disabled={useEnvKey}
                         />
                     </div>
@@ -266,7 +266,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 value={draftConfig.baseUrl || ''}
                                 onChange={(e) => setDraftConfig({...draftConfig, baseUrl: e.target.value})}
                                 placeholder="例如: https://api.deepseek.com"
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
                         </div>
                     )}
@@ -313,7 +313,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             <select 
                                 value={draftConfig.modelId} 
                                 onChange={(e) => setDraftConfig({...draftConfig, modelId: e.target.value})}
-                                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none appearance-none"
+                                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
                             >
                                 {currentModelList.map(model => (
                                     <option key={model.id} value={model.id}>{model.name}</option>
@@ -330,7 +330,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                     <button 
                         onClick={handleSave}
-                        className="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
                     >
                         <Save className="w-4 h-4" />
                         保存配置

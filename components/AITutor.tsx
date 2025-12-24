@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import ReactDOM from 'react-dom'; // CRITICAL FIX: Use default import for max compatibility
+import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertCircle, Info, Minimize2, Maximize2 } from 'lucide-react';
 import { ChatMessage, AIConfig, AIProvider, ChatSession, ExamSession, SubjectType } from '../types';
 import { sendMessageToGeminiStream, repairMalformedJson, evaluateQuizAnswer } from '../services/geminiService';
@@ -89,7 +89,7 @@ const Notification = ({ message, type, onClose }: { message: string, type: 'succ
     };
 
     return (
-        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[100000] px-4 py-2 rounded-full border shadow-sm text-xs font-medium flex items-center gap-2 animate-in slide-in-from-top-2 fade-in duration-200 ${bgColors[type]}`}>
+        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[2147483647] px-4 py-2 rounded-full border shadow-sm text-xs font-medium flex items-center gap-2 animate-in slide-in-from-top-2 fade-in duration-200 ${bgColors[type]}`}>
             {type === 'success' && <CheckCircle2 className="w-3.5 h-3.5" />}
             {type === 'error' && <AlertCircle className="w-3.5 h-3.5" />}
             {type === 'info' && <Info className="w-3.5 h-3.5" />}
@@ -150,6 +150,18 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       gemini: DEFAULT_GEMINI_MODELS,
       openai: DEFAULT_OPENAI_MODELS
   });
+
+  // Body Scroll Lock for Fullscreen
+  useEffect(() => {
+      if (isFullscreen) {
+          document.body.style.overflow = 'hidden';
+      } else {
+          document.body.style.overflow = '';
+      }
+      return () => {
+          document.body.style.overflow = '';
+      };
+  }, [isFullscreen]);
 
   // Save Sessions
   useEffect(() => {
@@ -726,7 +738,18 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   // Main UI Content (Extracted for Portal use)
   const renderMainContent = () => (
-    <div className={`flex flex-col h-full bg-slate-50 relative ${isFullscreen ? 'fixed inset-0 z-[99999] w-screen h-screen bg-white overflow-hidden' : ''}`}>
+    <div 
+        className={`flex flex-col h-full bg-slate-50 relative`}
+        style={isFullscreen ? { 
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            width: '100vw', 
+            height: '100dvh', 
+            zIndex: 2147483647, // Max z-index to break all stacking contexts
+            backgroundColor: '#fff'
+        } : {}}
+    >
       {/* Notifications */}
       {notification && (
           <Notification 
@@ -812,7 +835,8 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   // Portal Logic: Only when fullscreen is active
   if (isFullscreen) {
-      return ReactDOM.createPortal(renderMainContent(), document.body);
+      // Use createPortal to move content to body
+      return createPortal(renderMainContent(), document.body);
   }
 
   return <div className="h-full w-full">{renderMainContent()}</div>;
