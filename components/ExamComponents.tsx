@@ -2,24 +2,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ExamConfig, ExamSession, ExamQuestion, AIConfig, QuestionBlueprint } from '../types';
 import { generateExamBlueprint, generateExamQuestion, gradeExamQuestion } from '../services/geminiService';
-import { Loader2, Play, CheckCircle2, AlertCircle, FileText, ChevronRight, ChevronLeft, Save, X, RotateCcw, BrainCircuit, CheckSquare, Square, PenTool, Cpu, RefreshCw } from 'lucide-react';
+import { Loader2, Play, CheckCircle2, AlertCircle, FileText, ChevronRight, ChevronLeft, Save, X, RotateCcw, BrainCircuit, CheckSquare, Square, PenTool, Cpu, RefreshCw, LayoutGrid } from 'lucide-react';
 import { MathFormula } from './MathFormula';
 
 // --- Helper: Content Renderer for Exams ---
-// Parses string with $LaTeX$ and renders it mixed with text
+// Parses string with $LaTeX$, $$LaTeX$$, \[LaTeX\], \(LaTeX\)
 const ContentRenderer: React.FC<{ content: string; className?: string }> = ({ content, className = '' }) => {
     if (!content) return null;
-    // Split by $...$ or $$...$$
-    const parts = content.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/g);
+    
+    // Improved regex to handle \[...\] and \(...\) which Gemini 3.0 often outputs
+    // Split by: $$...$$, \[...\], $...$, \(...\)
+    const parts = content.split(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$[\s\S]*?\$|\\\([\s\S]*?\\\))/g);
     
     return (
-        <span className={className}>
+        <span className={`whitespace-pre-wrap ${className}`}>
             {parts.map((part, i) => {
-                if (part.startsWith('$$') && part.endsWith('$$')) {
-                    return <MathFormula key={i} tex={part.slice(2, -2)} block />;
+                if ((part.startsWith('$$') && part.endsWith('$$')) || (part.startsWith('\\[') && part.endsWith('\\]'))) {
+                    // Block Math
+                    const tex = part.startsWith('$$') ? part.slice(2, -2) : part.slice(2, -2);
+                    return <MathFormula key={i} tex={tex} block />;
                 }
-                if (part.startsWith('$') && part.endsWith('$')) {
-                    return <MathFormula key={i} tex={part.slice(1, -1)} />;
+                if ((part.startsWith('$') && part.endsWith('$')) || (part.startsWith('\\(') && part.endsWith('\\)'))) {
+                    // Inline Math
+                    const tex = part.startsWith('$') ? part.slice(1, -1) : part.slice(2, -2);
+                    return <MathFormula key={i} tex={tex} />;
                 }
                 return <span key={i}>{part}</span>;
             })}
@@ -303,11 +309,19 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
     const [exam, setExam] = useState<ExamSession>(initialExam);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [gradingLoading, setGradingLoading] = useState<Record<string, boolean>>({});
+    const scrollRef = useRef<HTMLDivElement>(null);
     
     // Auto-save on change
     useEffect(() => {
         onSave(exam);
     }, [exam]);
+
+    // Scroll to top when question changes
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }, [currentIndex]);
 
     const currentQuestion = exam.questions[currentIndex];
 
@@ -324,24 +338,78 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
         if (q.isGraded || !q.userAnswer) return;
 
         // --- Hybrid Grading Logic ---
-        // 1. Local Grading for Objective Questions
-        if (q.type === 'single_choice' || q.type === 'multiple_choice' || q.type === 'true_false') {
+        
+        // 1. Proportional Grading for Multiple Choice
+        if (q.type === 'multiple_choice') {
+            const userAns = Array.isArray(q.userAnswer) ? q.userAnswer : [];
+            const correctAns = Array.isArray(q.correctAnswer) ? q.correctAnswer : [];
+            
+            // Normalize
+            const userSet = new Set(userAns.map(s => String(s).trim()));
+            const correctSet = new Set(correctAns.map(s => String(s).trim()));
+            
+            let score = 0;
+            let feedback = "";
+            
+            // Logic: 
+            // 1. If any wrong option selected -> 0 points
+            // 2. If all correct options selected (and no wrong) -> Full points
+            // 3. If subset of correct options selected (and no wrong) -> Proportional points
+            
+            let hasWrong = false;
+            let correctCount = 0;
+            
+            userSet.forEach(val => {
+                if (!correctSet.has(val)) {
+                    hasWrong = true;
+                } else {
+                    correctCount++;
+                }
+            });
+            
+            if (hasWrong) {
+                score = 0;
+                feedback = "回答错误 (包含错误选项)";
+            } else if (correctCount === 0) {
+                score = 0; // Empty selection (shouldn't happen if validation is on)
+                feedback = "未作答";
+            } else if (correctCount === correctSet.size) {
+                score = q.score;
+                feedback = "回答正确";
+            } else {
+                // Partial credit: (correctCount / totalCorrect) * fullScore
+                // Floor to nearest 0.5 to keep scores clean
+                const rawScore = (correctCount / correctSet.size) * q.score;
+                score = Math.floor(rawScore * 2) / 2;
+                // Minimum 0.5 score if at least 1 is right
+                if (score < 0.5 && correctCount > 0) score = 0.5;
+                feedback = `部分正确 (选对${correctCount}个)`;
+            }
+
+            setExam(prev => {
+                const newQuestions = [...prev.questions];
+                newQuestions[index] = {
+                    ...newQuestions[index],
+                    isGraded: true,
+                    obtainedScore: score,
+                    feedback: feedback
+                };
+                return { ...prev, questions: newQuestions };
+            });
+            return;
+        }
+
+        // 2. Exact Match Grading for Single Choice / True False
+        if (q.type === 'single_choice' || q.type === 'true_false') {
             let score = 0;
             let isCorrect = false;
             
-            // Normalize answers for comparison
-            // Simple string/value comparison
-            if (Array.isArray(q.userAnswer) && Array.isArray(q.correctAnswer)) {
-                 const u = [...q.userAnswer].sort().join(',');
-                 const c = [...q.correctAnswer].sort().join(',');
-                 isCorrect = u === c;
-            } else {
-                 isCorrect = String(q.userAnswer).trim() === String(q.correctAnswer).trim();
-            }
+            const u = String(q.userAnswer).trim();
+            const c = String(q.correctAnswer).trim();
+            isCorrect = u === c;
 
             if (isCorrect) score = q.score;
 
-            // Functional Update to avoid race condition
             setExam(prev => {
                 const newQuestions = [...prev.questions];
                 newQuestions[index] = {
@@ -355,12 +423,11 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
             return;
         }
 
-        // 2. AI Grading for Subjective Questions
+        // 3. AI Grading for Subjective Questions
         setGradingLoading(prev => ({ ...prev, [q.id]: true }));
         try {
             const result = await gradeExamQuestion(q, q.userAnswer, aiConfig);
             
-            // Functional Update to avoid race condition
             setExam(prev => {
                 const newQuestions = [...prev.questions];
                 newQuestions[index] = {
@@ -379,17 +446,102 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
     };
 
     const handleSubmitAll = async () => {
-        // Find indices of questions that need grading
-        const ungradedIndices = exam.questions.map((q, i) => (!q.isGraded && q.userAnswer) ? i : -1).filter(i => i !== -1);
-        
-        // Process them sequentially to avoid overwhelming rate limits, or parallel if robust
-        // Given we use functional updates now, race conditions in state are handled, 
-        // but we should still be careful about API concurrency.
-        for (const idx of ungradedIndices) {
-            await handleGradeSingle(idx);
+        // 1. Identify questions that need grading
+        const questionsToGrade = exam.questions.map((q, index) => ({ q, index }))
+            .filter(({ q }) => !q.isGraded && q.userAnswer !== undefined && q.userAnswer !== "");
+
+        if (questionsToGrade.length === 0) {
+             setExam(prev => ({ ...prev, status: 'submitted' }));
+             return;
         }
-        
-        setExam(prev => ({ ...prev, status: 'submitted' }));
+
+        // 2. Set loading state for ALL pending questions
+        const newLoadingState = { ...gradingLoading };
+        questionsToGrade.forEach(({ q }) => {
+            newLoadingState[q.id] = true;
+        });
+        setGradingLoading(newLoadingState);
+
+        try {
+            // 3. Perform grading in PARALLEL
+            const results = await Promise.all(
+                questionsToGrade.map(async ({ q, index }) => {
+                    // Re-implement grading logic here to allow pure data transformation
+                    // Choice/TrueFalse: Local Grading
+                    if (q.type === 'multiple_choice') {
+                        const userAns = Array.isArray(q.userAnswer) ? q.userAnswer : [];
+                        const correctAns = Array.isArray(q.correctAnswer) ? q.correctAnswer : [];
+                        const userSet = new Set(userAns.map(s => String(s).trim()));
+                        const correctSet = new Set(correctAns.map(s => String(s).trim()));
+                        
+                        let score = 0;
+                        let feedback = "";
+                        let hasWrong = false;
+                        let correctCount = 0;
+                        
+                        userSet.forEach(val => {
+                            if (!correctSet.has(val)) hasWrong = true;
+                            else correctCount++;
+                        });
+                        
+                        if (hasWrong) {
+                            score = 0;
+                            feedback = "回答错误 (包含错误选项)";
+                        } else if (correctCount === 0) {
+                            score = 0; 
+                            feedback = "未作答";
+                        } else if (correctCount === correctSet.size) {
+                            score = q.score;
+                            feedback = "回答正确";
+                        } else {
+                            const rawScore = (correctCount / correctSet.size) * q.score;
+                            score = Math.floor(rawScore * 2) / 2;
+                            if (score < 0.5 && correctCount > 0) score = 0.5;
+                            feedback = `部分正确 (选对${correctCount}个)`;
+                        }
+                        return { index, score, feedback };
+                    } 
+                    else if (q.type === 'single_choice' || q.type === 'true_false') {
+                        const u = String(q.userAnswer).trim();
+                        const c = String(q.correctAnswer).trim();
+                        const isCorrect = u === c;
+                        return { 
+                            index, 
+                            score: isCorrect ? q.score : 0, 
+                            feedback: isCorrect ? "回答正确" : "回答错误" 
+                        };
+                    }
+                    else {
+                        // AI Grading
+                        const res = await gradeExamQuestion(q, q.userAnswer, aiConfig);
+                        return {
+                            index,
+                            score: res.score,
+                            feedback: res.feedback
+                        };
+                    }
+                })
+            );
+
+            // 4. Batch update state
+            setExam(prev => {
+                const newQuestions = [...prev.questions];
+                results.forEach(({ index, score, feedback }) => {
+                    newQuestions[index] = {
+                        ...newQuestions[index],
+                        isGraded: true,
+                        obtainedScore: score,
+                        feedback: feedback
+                    };
+                });
+                return { ...prev, questions: newQuestions, status: 'submitted' };
+            });
+
+        } catch (e) {
+            console.error("Batch grading failed", e);
+        } finally {
+            setGradingLoading({});
+        }
     };
 
     const totalScore = exam.questions.reduce((acc, q) => acc + (q.obtainedScore || 0), 0);
@@ -407,7 +559,8 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                             const isTrueFalse = q.type === 'true_false';
                             const rawOptText = isTrueFalse ? (i === 0 ? "正确 (True)" : "错误 (False)") : opt;
                             // Clean up option text if it starts with "A. " etc for logic, but display full
-                            const val = isTrueFalse ? (i === 0) : opt.split('.')[0].trim(); 
+                            // SAFETY FIX: Cast to string before splitting to avoid "opt.split is not a function"
+                            const val = isTrueFalse ? (i === 0) : String(opt).split('.')[0].trim(); 
                             const isSelected = q.userAnswer === val;
                             
                             let className = "w-full text-left p-3 rounded-lg border transition-all flex items-center gap-3 ";
@@ -427,7 +580,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                                     className={className}
                                 >
                                     {isSelected ? <CheckCircle2 className="w-5 h-5 text-indigo-600" /> : <div className="w-5 h-5 rounded-full border border-slate-300" />}
-                                    <span className="text-sm"><ContentRenderer content={rawOptText} /></span>
+                                    <span className="text-sm"><ContentRenderer content={String(rawOptText)} /></span>
                                 </button>
                             );
                         })}
@@ -437,7 +590,8 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                 return (
                     <div className="space-y-2 mt-4">
                         {(q.options || []).map((opt, i) => {
-                            const val = opt.split('.')[0].trim();
+                            // SAFETY FIX: Cast to string before splitting
+                            const val = String(opt).split('.')[0].trim();
                             const currentAns = (q.userAnswer as string[]) || [];
                             const isSelected = currentAns.includes(val);
                             
@@ -461,14 +615,14 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                                     className={className}
                                 >
                                     {isSelected ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5 text-slate-300" />}
-                                    <span className="text-sm"><ContentRenderer content={opt} /></span>
+                                    <span className="text-sm"><ContentRenderer content={String(opt)} /></span>
                                 </button>
                             );
                         })}
                     </div>
                 );
-            case 'fill_in':
-            case 'subjective':
+            // Default fallthrough for fill_in, subjective, and ANY UNKNOWN TYPE
+            default:
                 return (
                     <div className="mt-4">
                         <textarea 
@@ -480,32 +634,38 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                         />
                     </div>
                 );
-            default:
-                return <div>Unsupported Type</div>;
         }
     };
 
     return (
         <div className="fixed inset-0 z-[100] bg-slate-50 flex flex-col md:flex-row h-full">
-            {/* Sidebar */}
-            <div className="w-full md:w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
-                <div className="p-4 border-b border-slate-100">
-                    <h2 className="font-bold text-slate-800 truncate">{exam.config.title}</h2>
-                    <div className="flex justify-between text-xs text-slate-500 mt-1">
-                        <span>总分: {maxScore}</span>
-                        <span className={exam.status === 'submitted' ? "text-emerald-600 font-bold" : ""}>
-                            {exam.status === 'submitted' ? `得分: ${totalScore}` : "进行中"}
-                        </span>
+            {/* Sidebar / Topbar */}
+            <div className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col shrink-0 max-h-[35vh] md:max-h-full">
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center md:block">
+                    <div className="min-w-0">
+                        <h2 className="font-bold text-slate-800 truncate">{exam.config.title}</h2>
+                        <div className="flex justify-between text-xs text-slate-500 mt-1 gap-4">
+                            <span>总分: {maxScore}</span>
+                            <span className={exam.status === 'submitted' ? "text-emerald-600 font-bold" : ""}>
+                                {exam.status === 'submitted' ? `得分: ${totalScore}` : "进行中"}
+                            </span>
+                        </div>
                     </div>
+                    {/* Mobile Close Button in Header */}
+                    <button onClick={onClose} className="md:hidden p-2 text-slate-400 hover:bg-slate-50 rounded-lg">
+                        <X className="w-5 h-5" />
+                    </button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-2">
-                    <div className="grid grid-cols-4 gap-2">
+                
+                {/* Question Navigator - Horizontal Scroll on Mobile, Grid on Desktop */}
+                <div className="flex-1 overflow-x-auto md:overflow-y-auto md:overflow-x-hidden p-2 scrollbar-hide">
+                    <div className="flex md:grid md:grid-cols-4 gap-2 min-w-max md:min-w-0 px-2 md:px-0">
                         {exam.questions.map((q, i) => (
                             <button
                                 key={i}
                                 onClick={() => setCurrentIndex(i)}
                                 className={`
-                                    h-10 rounded-lg text-xs font-bold transition-all relative
+                                    w-10 h-10 md:w-auto md:h-10 rounded-lg text-xs font-bold transition-all relative shrink-0 flex items-center justify-center
                                     ${currentIndex === i ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}
                                     ${q.isGraded 
                                         ? (q.obtainedScore === q.score ? 'bg-emerald-100 text-emerald-700' : (q.obtainedScore! > 0 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'))
@@ -519,12 +679,15 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                         ))}
                     </div>
                 </div>
-                <div className="p-4 border-t border-slate-100 space-y-2">
+                
+                {/* Desktop Footer Actions */}
+                <div className="p-4 border-t border-slate-100 space-y-2 hidden md:block">
                     <button onClick={onClose} className="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50">
                         暂时离开
                     </button>
                     {exam.status !== 'submitted' && (
-                        <button onClick={handleSubmitAll} className="w-full py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+                        <button onClick={handleSubmitAll} disabled={Object.keys(gradingLoading).length > 0} className="w-full py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                            {Object.keys(gradingLoading).length > 0 ? <Loader2 className="w-4 h-4 animate-spin"/> : null}
                             交卷并评分
                         </button>
                     )}
@@ -532,8 +695,8 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
             </div>
 
             {/* Main Area */}
-            <div className="flex-1 flex flex-col h-full overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-4 md:p-8">
+            <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+                <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 md:pb-8">
                     <div className="max-w-3xl mx-auto">
                         {/* Question Card */}
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
@@ -620,7 +783,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                 </div>
 
                 {/* Footer Nav */}
-                <div className="bg-white border-t border-slate-200 p-4 flex justify-between items-center shrink-0">
+                <div className="bg-white border-t border-slate-200 p-4 flex justify-between items-center shrink-0 z-20">
                     <button 
                         onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
                         disabled={currentIndex === 0}
@@ -628,7 +791,16 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                     >
                         <ChevronLeft className="w-6 h-6 text-slate-600" />
                     </button>
-                    <span className="text-sm font-bold text-slate-400">
+                    
+                    {/* Mobile Submit Button in Center */}
+                    {exam.status !== 'submitted' && (
+                        <button onClick={handleSubmitAll} disabled={Object.keys(gradingLoading).length > 0} className="md:hidden px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2">
+                            {Object.keys(gradingLoading).length > 0 ? <Loader2 className="w-4 h-4 animate-spin"/> : null}
+                            交卷
+                        </button>
+                    )}
+
+                    <span className="text-sm font-bold text-slate-400 hidden md:block">
                         {currentIndex + 1} / {exam.questions.length}
                     </span>
                     <button 

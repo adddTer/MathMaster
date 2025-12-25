@@ -11,6 +11,8 @@ import { HistoryView } from './ai-tutor/HistoryView';
 import { ChatHeader } from './ai-tutor/ChatHeader';
 import { ChatInput } from './ai-tutor/ChatInput';
 import { MessageList } from './ai-tutor/MessageList';
+import { getCurriculumSummary } from '../data/mathContent';
+import { getChineseCurriculumSummary } from '../data/chineseContent';
 
 interface AITutorProps {
   currentContext: string;
@@ -137,7 +139,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [notification, setNotification] = useState<{msg: string, type: 'success' | 'error' | 'info'} | null>(null);
@@ -529,36 +531,63 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
     const historyForApi = updatedMessagesWithUser.filter(m => !m.isError);
 
     let accumulatedResponse = '';
+    
+    // Inject full curriculum summary so the AI knows what knowledge points exist for exams.
+    const fullContext = `${currentContext}\n\n【当前学科完整目录参考】\n${currentContext.includes('语文') ? getChineseCurriculumSummary() : getCurriculumSummary()}`;
+
+    // Output Buffer for smoother rendering
+    let buffer = '';
+    let flushTimeout: any = null;
+
+    const flushBuffer = () => {
+        if (!buffer) return;
+        
+        accumulatedResponse += buffer;
+        buffer = ''; // Clear buffer immediately
+        
+        setSessions(prev => {
+            return prev.map(s => {
+                if (s.id === (currentSession.id || currentSessionId)) {
+                    const msgs = [...s.messages];
+                    const lastMsg = msgs[msgs.length - 1];
+                    if (lastMsg.role === 'model') {
+                        msgs[msgs.length - 1] = { ...lastMsg, text: accumulatedResponse };
+                    }
+                    return { ...s, messages: msgs };
+                }
+                return s;
+            });
+        });
+
+        if (scrollRef.current) {
+                const isNearBottom = scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight < 100;
+                if (isNearBottom) scrollToBottom();
+        }
+    };
 
     try {
       await sendMessageToGeminiStream(
           historyForApi, 
-          currentContext, 
+          fullContext, // Pass enriched context
           userMsg.text, 
           effectiveConfig, 
           (chunk) => {
-              accumulatedResponse += chunk;
+              buffer += chunk;
               
-              setSessions(prev => {
-                  return prev.map(s => {
-                      if (s.id === (currentSession.id || currentSessionId)) {
-                          const msgs = [...s.messages];
-                          const lastMsg = msgs[msgs.length - 1];
-                          if (lastMsg.role === 'model') {
-                              msgs[msgs.length - 1] = { ...lastMsg, text: accumulatedResponse };
-                          }
-                          return { ...s, messages: msgs };
-                      }
-                      return s;
-                  });
-              });
-
-              if (scrollRef.current) {
-                   const isNearBottom = scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight < 100;
-                   if (isNearBottom) scrollToBottom();
+              // Throttle updates to ~50ms to reduce render flicker
+              if (!flushTimeout) {
+                  flushTimeout = setTimeout(() => {
+                      flushBuffer();
+                      flushTimeout = null;
+                  }, 50);
               }
           }
       );
+      
+      // Ensure final flush
+      if (flushTimeout) clearTimeout(flushTimeout);
+      flushBuffer();
+
     } catch (error: any) {
       setSessions(prev => prev.map(s => {
           if (s.id === (currentSession.id || currentSessionId)) {
@@ -595,7 +624,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
   };
 
   const getTagFromContent = (str: string) => {
-      const match = str.match(/:::(quiz|keypoint|choice|fill_in|true_false|step_solver|comparison|correction|checklist|tips|suggestions|plot|chart|complex_plane|solid_geometry|essay_generator)/);
+      const match = str.match(/:::(quiz|keypoint|choice|fill_in|true_false|step_solver|comparison|correction|checklist|tips|suggestions|plot|chart|complex_plane|solid_geometry|exam_config|essay_generator)/);
       return match ? `:::${match[1]}` : ':::';
   };
 
@@ -639,6 +668,9 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
           } else {
                setActiveExam(fullExam);
           }
+          
+          // Force fullscreen when starting exam
+          setIsFullscreen(true);
 
           if (typeof msgIndex === 'number' && typeof blockIndex === 'number') {
               const liteExam = {

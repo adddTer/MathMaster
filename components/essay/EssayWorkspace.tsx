@@ -56,7 +56,7 @@ export const EssayWorkspace: React.FC<EssayWorkspaceProps> = ({
     const [pendingDecision, setPendingDecision] = useState<string | null>(null);
 
     const scrollRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
 
     // --- Persist State ---
     useEffect(() => {

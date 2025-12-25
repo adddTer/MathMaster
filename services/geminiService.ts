@@ -4,7 +4,9 @@ import { ChatMessage, AIConfig, ExamConfig, ExamQuestion, QuestionBlueprint } fr
 import { 
     SYSTEM_PROMPT, 
     STRICT_REPAIR_SYS_PROMPT, 
-    STRICT_GRADER_SYS_PROMPT, 
+    STRICT_GRADER_SYS_PROMPT,
+    EXAM_GRADER_SYS_PROMPT,
+    EXAM_SYS_PROMPT, 
     BLUEPRINT_PROMPT, 
     GENERATOR_PROMPT, 
     GRADER_PROMPT 
@@ -12,13 +14,60 @@ import {
 
 // Helper to sanitize error messages
 const sanitizeError = (error: any): string => {
-    // Ensure msg is a string before calling replace
     let msg = String(error?.message || error || '未知错误');
-    // Replace specific provider names with generic terms to avoid confusion
     msg = msg.replace(/OpenAI/gi, 'AI Service');
     msg = msg.replace(/Gemini/gi, 'AI Service');
     msg = msg.replace(/Google/gi, 'Provider');
     return msg;
+};
+
+// --- ROBUST JSON EXTRACTION ---
+const extractJsonFromText = (text: string): string => {
+    if (!text) return "{}";
+    
+    // 1. Prioritize extracting from markdown code block ```json ... ``` or ``` ... ```
+    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (codeBlockMatch) {
+        return codeBlockMatch[1].trim();
+    }
+
+    let clean = text.trim();
+    
+    // 2. Fallback: Find the first valid starting character for JSON ( { or [ )
+    // We scan from start to find the first { or [
+    const firstOpenBrace = clean.indexOf('{');
+    const firstOpenBracket = clean.indexOf('[');
+    
+    // Find the last valid ending character
+    const lastCloseBrace = clean.lastIndexOf('}');
+    const lastCloseBracket = clean.lastIndexOf(']');
+
+    let start = -1;
+    let end = -1;
+
+    // Determine if we are looking for an Object or an Array based on which appears first
+    if (firstOpenBrace !== -1 && firstOpenBracket !== -1) {
+        if (firstOpenBrace < firstOpenBracket) {
+            start = firstOpenBrace;
+            end = lastCloseBrace;
+        } else {
+            start = firstOpenBracket;
+            end = lastCloseBracket;
+        }
+    } else if (firstOpenBrace !== -1) {
+        start = firstOpenBrace;
+        end = lastCloseBrace;
+    } else if (firstOpenBracket !== -1) {
+        start = firstOpenBracket;
+        end = lastCloseBracket;
+    }
+
+    // Extract the substring if valid indices found
+    if (start !== -1 && end !== -1 && end >= start) {
+        return clean.substring(start, end + 1);
+    }
+
+    return clean;
 };
 
 // Test Gemini Connection
@@ -82,6 +131,7 @@ const callGeminiStream = async (config: AIConfig, history: ChatMessage[], contex
         model: modelId,
         config: {
             systemInstruction: sysPromptOverride || SYSTEM_PROMPT(context),
+            temperature: 0.85, // Increase randomness for less repetitive content
         },
         history: history.map(msg => ({
             role: msg.role,
@@ -141,7 +191,7 @@ const callOpenAIStream = async (config: AIConfig, history: ChatMessage[], contex
         body: JSON.stringify({
           model: modelId,
           messages: messages,
-          temperature: 0.7,
+          temperature: 0.85, // Increase randomness
           stream: true
         })
       });
@@ -236,18 +286,7 @@ export const repairMalformedJson = async (brokenContent: string, errorDescriptio
         } else {
             result = await callGeminiAPI(config, [], "JSON Repair", userPayload, STRICT_REPAIR_SYS_PROMPT);
         }
-        
-        let clean = result.trim();
-        const start = clean.indexOf('{');
-        const end = clean.lastIndexOf('}');
-        
-        if (start !== -1 && end !== -1 && end > start) {
-            clean = clean.substring(start, end + 1);
-        } else {
-            clean = clean.replace(/```json/g, '').replace(/```/g, '').trim();
-        }
-        
-        return clean;
+        return extractJsonFromText(result);
     } catch (e) {
         throw new Error("Repair failed");
     }
@@ -263,19 +302,14 @@ export const evaluateQuizAnswer = async (question: string, userAnswer: string, c
 
     try {
         let responseText = "";
+        // Use STRICT_GRADER_SYS_PROMPT for grading chat quizzes (status based)
         if (config.provider === 'openai') {
             responseText = await callOpenAIAPI(config, [], context, userPayload, STRICT_GRADER_SYS_PROMPT(context));
         } else {
             responseText = await callGeminiAPI(config, [], context, userPayload, STRICT_GRADER_SYS_PROMPT(context));
         }
         
-        let cleanJson = responseText.trim();
-        const start = cleanJson.indexOf('{');
-        const end = cleanJson.lastIndexOf('}');
-        if (start !== -1 && end !== -1) {
-            cleanJson = cleanJson.substring(start, end + 1);
-        }
-        
+        const cleanJson = extractJsonFromText(responseText);
         const result = JSON.parse(cleanJson);
         
         // Robust check: handle if AI returns wrapper
@@ -299,19 +333,12 @@ export const generateExamBlueprint = async (config: ExamConfig, aiConfig: AIConf
         const prompt = BLUEPRINT_PROMPT(config);
         
         if (aiConfig.provider === 'openai') {
-            responseText = await callOpenAIAPI(aiConfig, [], "Exam Blueprint", "Create blueprint.", prompt);
+            responseText = await callOpenAIAPI(aiConfig, [], "Exam Blueprint", prompt, EXAM_SYS_PROMPT);
         } else {
-            responseText = await callGeminiAPI(aiConfig, [], "Exam Blueprint", "Create blueprint.", prompt);
+            responseText = await callGeminiAPI(aiConfig, [], "Exam Blueprint", prompt, EXAM_SYS_PROMPT);
         }
 
-        let cleanJson = responseText.trim();
-        cleanJson = cleanJson.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
-        const start = cleanJson.indexOf('[');
-        const end = cleanJson.lastIndexOf(']');
-        if (start !== -1 && end !== -1) {
-            cleanJson = cleanJson.substring(start, end + 1);
-        }
-
+        const cleanJson = extractJsonFromText(responseText);
         const parsed = JSON.parse(cleanJson);
         
         // Smart unwrap if AI wrapped the array in an object
@@ -319,10 +346,20 @@ export const generateExamBlueprint = async (config: ExamConfig, aiConfig: AIConf
             if (parsed.blueprint && Array.isArray(parsed.blueprint)) return parsed.blueprint;
             if (parsed.questions && Array.isArray(parsed.questions)) return parsed.questions;
             if (parsed.items && Array.isArray(parsed.items)) return parsed.items;
+            
+            // Generic fallback: Look for any property that is an array
+            const potentialArray = Object.values(parsed).find(val => Array.isArray(val));
+            if (potentialArray) return potentialArray as QuestionBlueprint[];
+
             throw new Error("Returned JSON is not an array");
         }
 
-        return parsed;
+        // Fill missing indices
+        return parsed.map((item: any, i: number) => ({
+            ...item,
+            index: item.index !== undefined ? item.index : i
+        }));
+
     } catch (e: any) {
         throw new Error("Blueprint generation failed: " + sanitizeError(e));
     }
@@ -338,29 +375,56 @@ export const generateExamQuestion = async (
         const prompt = GENERATOR_PROMPT(blueprint);
 
         if (aiConfig.provider === 'openai') {
-            responseText = await callOpenAIAPI(aiConfig, [], "Exam Question Gen", "Generate question.", prompt);
+            responseText = await callOpenAIAPI(aiConfig, [], "Exam Question Gen", prompt, EXAM_SYS_PROMPT);
         } else {
-            responseText = await callGeminiAPI(aiConfig, [], "Exam Question Gen", "Generate question.", prompt);
+            responseText = await callGeminiAPI(aiConfig, [], "Exam Question Gen", prompt, EXAM_SYS_PROMPT);
         }
 
-        let cleanJson = responseText.trim();
-        cleanJson = cleanJson.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
-        const start = cleanJson.indexOf('{');
-        const end = cleanJson.lastIndexOf('}');
-        if (start !== -1 && end !== -1) {
-            cleanJson = cleanJson.substring(start, end + 1);
-        }
-
+        const cleanJson = extractJsonFromText(responseText);
         const data = JSON.parse(cleanJson);
         
         // Smart unwrap
         const questionData = data.question || data;
 
+        // --- VALIDATION & SANITIZATION ---
+        
+        // 1. Ensure content exists
+        if (!questionData.content) {
+            // Fallback: try to find 'question' field
+            if (questionData.question) questionData.content = questionData.question;
+            else throw new Error("Missing 'content' field in question data.");
+        }
+
+        // 2. Sanitize Options (Ensure they are strings)
+        if (Array.isArray(questionData.options)) {
+            questionData.options = questionData.options.map((opt: any) => {
+                if (typeof opt === 'object' && opt !== null) {
+                    // Handle cases where AI returns [{"text": "Option A"}, ...]
+                    return opt.text || opt.value || opt.content || JSON.stringify(opt);
+                }
+                return String(opt);
+            });
+        }
+
+        // 3. Ensure options exist for choice types
+        if (['single_choice', 'multiple_choice'].includes(blueprint.type)) {
+            if (!questionData.options || !Array.isArray(questionData.options) || questionData.options.length < 2) {
+                throw new Error("Choice question missing valid 'options' array. (Expected at least 2 options)");
+            }
+        }
+        
+        // ------------------------
+
         delete questionData.thought_trace; // Cleanup
         
+        // CRITICAL FIX: Merge blueprint metadata (type, score, difficulty) 
+        // because AI might not return them or return inconsistent values.
         return {
             id: Date.now() + Math.random().toString(36).substr(2, 5),
-            ...questionData,
+            type: blueprint.type,           // FORCE blueprint type
+            score: blueprint.score,         // FORCE blueprint score
+            difficulty: blueprint.difficulty, // FORCE blueprint difficulty
+            ...questionData,                // Spread AI content (overwrites if keys exist, but we trust blueprint for metadata)
             isGraded: false
         };
     } catch (e: any) {
@@ -377,28 +441,22 @@ export const gradeExamQuestion = async (
         let responseText = "";
         const prompt = GRADER_PROMPT(question, userAnswer);
 
+        // USE EXAM_GRADER_SYS_PROMPT specifically to ensure score is returned
         if (aiConfig.provider === 'openai') {
-            responseText = await callOpenAIAPI(aiConfig, [], "Exam Grade", "Grade this.", prompt);
+            responseText = await callOpenAIAPI(aiConfig, [], "Exam Grade", prompt, EXAM_GRADER_SYS_PROMPT);
         } else {
-            responseText = await callGeminiAPI(aiConfig, [], "Exam Grade", "Grade this.", prompt);
+            responseText = await callGeminiAPI(aiConfig, [], "Exam Grade", prompt, EXAM_GRADER_SYS_PROMPT);
         }
 
-        let cleanJson = responseText.trim();
-        cleanJson = cleanJson.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
-        const start = cleanJson.indexOf('{');
-        const end = cleanJson.lastIndexOf('}');
-        if (start !== -1 && end !== -1) {
-            cleanJson = cleanJson.substring(start, end + 1);
-        }
-
+        const cleanJson = extractJsonFromText(responseText);
         const data = JSON.parse(cleanJson);
         
         // Smart unwrap
         const finalData = data.result || data.grading || data;
 
         return {
-            score: finalData.score,
-            feedback: finalData.feedback
+            score: typeof finalData.score === 'number' ? finalData.score : 0,
+            feedback: finalData.feedback || "批改完成"
         };
     } catch (e) {
         console.error("Grading failed", e);

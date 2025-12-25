@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { blockRegex, StandardTextBlock } from './blocks/utils';
-import { ChoiceBlock, FillInBlock, TrueFalseBlock, QuizBlock } from './blocks/QuestionBlocks';
+import { ChoiceBlock, MultipleChoiceBlock, FillInBlock, TrueFalseBlock, QuizBlock } from './blocks/QuestionBlocks';
 import { KeypointBlock, StepSolverBlock, ComparisonBlock, CorrectionBlock, ChecklistBlock, TipsBlock, SuggestionsBlock } from './blocks/ContentBlocks';
 import { PlotBlock, ChartBlock, ComplexBlock, GeometryBlock } from './blocks/VisualBlocks';
 import { ExamConfigBlock, EssayGeneratorBlock } from './blocks/ToolBlocks';
@@ -32,6 +32,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({ content, onInt
         if (part.startsWith(':::quiz')) return <QuizBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
         if (part.startsWith(':::keypoint')) return <KeypointBlock key={compKey} content={part} />;
         if (part.startsWith(':::choice')) return <ChoiceBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
+        if (part.startsWith(':::multiple_choice')) return <MultipleChoiceBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
         if (part.startsWith(':::fill_in')) return <FillInBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
         if (part.startsWith(':::true_false')) return <TrueFalseBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
         if (part.startsWith(':::step_solver')) return <StepSolverBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, MousePointerClick, Type, CheckSquare, HelpCircle, PenLine, Eye, BrainCircuit, ChevronUp, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, MousePointerClick, Type, CheckSquare, Square, HelpCircle, PenLine, Eye, BrainCircuit, ChevronUp, Loader2, AlertCircle } from 'lucide-react';
 import { safeParseJSON, StyledBlock, StandardTextBlock, ErrorBlock, InlineParser } from './utils';
 
 export const ChoiceBlock: React.FC<{ content: string; onInteract?: (a:string, p?:any) => void; savedState?: any }> = ({ content, onInteract, savedState }) => {
@@ -55,6 +55,123 @@ export const ChoiceBlock: React.FC<{ content: string; onInteract?: (a:string, p?
                             {selected === correctIndex ? '回答正确' : '回答错误'}
                         </span>
                         <span className="text-xs text-slate-400">正确答案: {String.fromCharCode(65 + correctIndex)}</span>
+                    </div>
+                    <div className="text-sm text-slate-600 leading-relaxed"><StandardTextBlock content={data.explanation || "暂无解析"} /></div>
+                </div>
+            )}
+        </StyledBlock>
+    );
+};
+
+export const MultipleChoiceBlock: React.FC<{ content: string; onInteract?: (a:string, p?:any) => void; savedState?: any }> = ({ content, onInteract, savedState }) => {
+    const rawJson = content.replace(/^:::multiple_choice\s*/, '').replace(/\s*:::$/, '');
+    const { data, error } = safeParseJSON(rawJson);
+    // selected is array of indices
+    const [selected, setSelected] = useState<number[]>(savedState?.selected ?? []);
+    const [hasSubmitted, setHasSubmitted] = useState(savedState?.hasSubmitted ?? false);
+    
+    if (!data) return <ErrorBlock content={rawJson} errorMsg={error || "Parse error"} onInteract={onInteract} savedState={savedState} />;
+    
+    // Parse correct answers. Supports array ["A", "C"] or string "AC" or "A,C"
+    let correctIndices: number[] = [];
+    if (Array.isArray(data.answer)) {
+        correctIndices = data.answer.map((a: string) => String(a).trim().toUpperCase().charCodeAt(0) - 65);
+    } else if (typeof data.answer === 'string') {
+        const str = data.answer.toUpperCase().replace(/[^A-Z]/g, '');
+        correctIndices = str.split('').map(c => c.charCodeAt(0) - 65);
+    }
+    
+    const toggleSelect = (idx: number) => {
+        if (hasSubmitted) return;
+        const newSelected = selected.includes(idx) 
+            ? selected.filter(i => i !== idx)
+            : [...selected, idx];
+        setSelected(newSelected);
+        onInteract?.('update_state', { state: { selected: newSelected } });
+    };
+
+    const handleSubmit = () => {
+        if (selected.length === 0) return;
+        setHasSubmitted(true);
+        onInteract?.('update_state', { state: { hasSubmitted: true } });
+    };
+
+    // Grading Logic
+    const userSet = new Set<number>(selected);
+    const correctSet = new Set<number>(correctIndices);
+    let hasWrong = false;
+    let missingCorrect = false;
+    
+    userSet.forEach((i) => { if(!correctSet.has(i)) hasWrong = true; });
+    correctSet.forEach((i) => { if(!userSet.has(i)) missingCorrect = true; });
+    
+    let status = 'wrong';
+    if (!hasWrong) {
+        status = missingCorrect ? 'partial' : 'correct';
+    }
+
+    return (
+        <StyledBlock title="多选题" icon={CheckSquare} color="indigo">
+             <StandardTextBlock content={data.question || ""} />
+             <div className="mt-4 space-y-2">
+                 {(data.options || []).map((opt: string, idx: number) => {
+                     const isSelected = selected.includes(idx);
+                     const isCorrect = correctIndices.includes(idx);
+                     
+                     let statusClass = "border-slate-200 hover:bg-slate-50 hover:border-slate-300";
+                     if (isSelected) statusClass = "bg-indigo-50 border-indigo-500 text-indigo-900";
+
+                     let icon = isSelected ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5 text-slate-300" />;
+
+                     if (hasSubmitted) {
+                         if (isCorrect) {
+                             statusClass = "bg-emerald-50 border-emerald-500 ring-1 ring-emerald-500";
+                             // Mark missing correct answers if not selected
+                             icon = <CheckSquare className="w-5 h-5 text-emerald-600" />;
+                         } else if (isSelected && !isCorrect) {
+                             statusClass = "bg-red-50 border-red-300";
+                             icon = <XCircle className="w-5 h-5 text-red-500" />;
+                         } else {
+                             statusClass = "opacity-50 border-slate-100";
+                             icon = <Square className="w-5 h-5 text-slate-200" />;
+                         }
+                     }
+
+                     return (
+                        <button key={idx} onClick={() => toggleSelect(idx)} disabled={hasSubmitted}
+                            className={`w-full text-left p-3 rounded-lg border transition-all flex items-center justify-between group ${statusClass}`}>
+                            <span className={`text-sm flex-1 mr-2 ${hasSubmitted && isCorrect ? 'font-bold text-emerald-900' : 'text-slate-700'}`}>
+                                <InlineParser content={opt} />
+                            </span>
+                            {icon}
+                        </button>
+                     );
+                 })}
+             </div>
+             
+             {!hasSubmitted ? (
+                 <div className="mt-4 flex justify-end">
+                     <button 
+                        onClick={handleSubmit} 
+                        disabled={selected.length === 0}
+                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                     >
+                         提交答案
+                     </button>
+                 </div>
+             ) : (
+                <div className="bg-slate-50 p-4 border-t border-slate-100 animate-in slide-in-from-top-2 mt-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                            status === 'correct' ? 'bg-emerald-100 text-emerald-700' : 
+                            status === 'partial' ? 'bg-amber-100 text-amber-700' : 
+                            'bg-red-100 text-red-700'
+                        }`}>
+                            {status === 'correct' ? '完全正确' : status === 'partial' ? '部分正确 (漏选)' : '回答错误'}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                            正确答案: {correctIndices.map(i => String.fromCharCode(65 + i)).join('')}
+                        </span>
                     </div>
                     <div className="text-sm text-slate-600 leading-relaxed"><StandardTextBlock content={data.explanation || "暂无解析"} /></div>
                 </div>

@@ -3,7 +3,7 @@ import React, { useEffect } from 'react';
 import { MathFormula } from '../MathFormula';
 import { Loader2, RefreshCcw, ShieldAlert, XCircle, Copy, Check } from 'lucide-react';
 
-export const blockRegex = /(^|\n)(:::(?:quiz|keypoint|choice|fill_in|true_false|step_solver|comparison|correction|checklist|tips|suggestions|plot|chart|complex_plane|solid_geometry|exam_config|essay_generator|essay_decisions)\s*?\n[\s\S]*?\n:::)(?=\n|$)/g;
+export const blockRegex = /(^|\n)(:::(?:quiz|keypoint|choice|multiple_choice|fill_in|true_false|step_solver|comparison|correction|checklist|tips|suggestions|plot|chart|complex_plane|solid_geometry|exam_config|essay_generator|essay_decisions)\s*?\n[\s\S]*?\n:::)(?=\n|$)/g;
 
 export const safeParseJSON = (str: string): { data: any, error: string | null } => {
     try {
