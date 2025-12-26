@@ -9,7 +9,8 @@ import {
     EXAM_SYS_PROMPT, 
     BLUEPRINT_PROMPT, 
     GENERATOR_PROMPT, 
-    GRADER_PROMPT 
+    GRADER_PROMPT,
+    EXAM_REPORT_PROMPT 
 } from './prompts';
 
 // Helper to sanitize error messages
@@ -467,6 +468,7 @@ export const generateExamQuestion = async (
             type: blueprint.type,           // FORCE blueprint type
             score: blueprint.score,         // FORCE blueprint score
             difficulty: blueprint.difficulty, // FORCE blueprint difficulty
+            knowledgePoint: blueprint.knowledgePoint, // PASS KNOWLEDGE POINT for reporting
             ...questionData,                // Spread AI content (overwrites if keys exist, but we trust blueprint for metadata)
             isGraded: false
         };
@@ -512,5 +514,25 @@ export const gradeExamQuestion = async (
             };
         }
         return { score: 0, feedback: "AI 批改失败，请人工复核。" };
+    }
+};
+
+// 3. Generate Comprehensive Exam Report
+export const generateExamReport = async (
+    summary: any,
+    aiConfig: AIConfig,
+    onChunk: (text: string) => void
+): Promise<string> => {
+    try {
+        const prompt = EXAM_REPORT_PROMPT(JSON.stringify(summary, null, 2));
+        
+        // Re-use streaming logic for real-time report generation
+        if (aiConfig.provider === 'openai') {
+            return callOpenAIStream(aiConfig, [], "Exam Report", prompt, onChunk, "You are an expert tutor.");
+        } else {
+            return callGeminiStream(aiConfig, [], "Exam Report", prompt, onChunk, "You are an expert tutor.");
+        }
+    } catch (e: any) {
+        throw new Error("Report generation failed: " + sanitizeError(e));
     }
 };

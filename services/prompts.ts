@@ -307,6 +307,27 @@ Student Answer: "${JSON.stringify(userAnswer)}"
 Provide a score (0 to ${question.score}) and feedback (in Simplified Chinese, unless the question is English).
 `;
 
+// --- EXAM REPORT PROMPT ---
+export const EXAM_REPORT_PROMPT = (summary: string) => `
+You are a senior academic tutor.
+Based on the following exam results, generate a "Comprehensive Learning Evaluation Report" for the student.
+
+**Exam Data Summary**:
+${summary}
+
+**Report Sections**:
+1.  **📊 成绩总评**: Comment on the score and overall performance.
+2.  **🧠 知识点掌握分析**: Based on the knowledge points of correct/wrong questions, analyze strengths and weaknesses.
+3.  **🎯 错题深度剖析**: For wrong questions, briefly explain the likely cognitive gap.
+4.  **🚀 后续学习建议**: Specific actionable advice.
+
+**Requirements**:
+- Use Markdown formatting. 
+- Use bolding for key terms.
+- Tone: Encouraging, professional, insightful.
+- Language: Simplified Chinese.
+`;
+
 // --- ESSAY SERVICE PROMPTS ---
 
 export const ESSAY_BRAINSTORM_PROMPT = (topic: string, requirements: string = "") => `

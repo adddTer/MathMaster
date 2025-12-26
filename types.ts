@@ -75,6 +75,7 @@ export interface ExamQuestion {
   options?: string[]; // For choice questions
   score: number;
   difficulty: 'easy' | 'medium' | 'hard';
+  knowledgePoint?: string; // Metadata for reporting
   
   // AI Generation Data
   correctAnswer: string | boolean | string[]; // The standard answer

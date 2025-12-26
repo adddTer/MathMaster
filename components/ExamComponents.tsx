@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ExamConfig, ExamSession, ExamQuestion, AIConfig, QuestionBlueprint } from '../types';
-import { generateExamBlueprint, generateExamQuestion, gradeExamQuestion } from '../services/geminiService';
-import { Loader2, Play, CheckCircle2, AlertCircle, FileText, ChevronRight, ChevronLeft, Save, X, RotateCcw, BrainCircuit, CheckSquare, Square, PenTool, Cpu, RefreshCw, LayoutGrid } from 'lucide-react';
+import { generateExamBlueprint, generateExamQuestion, gradeExamQuestion, generateExamReport } from '../services/geminiService';
+import { Loader2, Play, CheckCircle2, AlertCircle, FileText, ChevronRight, ChevronLeft, Save, X, RotateCcw, BrainCircuit, CheckSquare, Square, PenTool, Cpu, RefreshCw, LayoutGrid, BarChart2 } from 'lucide-react';
 import { InlineParser } from './blocks/utils';
 
 // --- Helper: Content Renderer for Exams ---
@@ -48,12 +48,18 @@ export const ExamGeneratorBlock: React.FC<ExamGeneratorProps> = ({
     // Model Selection State
     const [selectedModelId, setSelectedModelId] = useState<string>(savedState?.selectedModelId || aiConfig.modelId || 'gemini-2.5-flash');
 
-    // Restore state
+    // Restore state and check for interrupted generation
     useEffect(() => {
         if (savedState) {
-            if (savedState.status) setStatus(savedState.status);
-            if (savedState.progress) setProgress(savedState.progress);
-            if (savedState.generatedExam) setGeneratedExam(savedState.generatedExam);
+            // If we restore state that says "generating" but we just mounted (e.g. after refresh),
+            // it means the previous session died. Force error state to allow retry.
+            if (savedState.status === 'generating' || savedState.status === 'planning') {
+                 setStatus('error');
+            } else {
+                if (savedState.status) setStatus(savedState.status);
+                if (savedState.progress) setProgress(savedState.progress);
+                if (savedState.generatedExam) setGeneratedExam(savedState.generatedExam);
+            }
         }
     }, []); // Run once on mount to sync
 
@@ -247,7 +253,7 @@ export const ExamGeneratorBlock: React.FC<ExamGeneratorProps> = ({
                         </button>
                         <div className="mt-3 flex items-start gap-2 text-[10px] text-amber-600 bg-amber-50 p-2 rounded border border-amber-100 leading-relaxed">
                             <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
-                            <span>试卷功能正处于测试阶段，AI 生成内容可能存在格式错误或逻辑偏差，建议人工复核。</span>
+                            <span>AI 生成内容可能存在格式错误或逻辑偏差，建议人工复核。</span>
                         </div>
                     </>
                 ) : (
@@ -266,13 +272,15 @@ export const ExamGeneratorBlock: React.FC<ExamGeneratorProps> = ({
                                 onClick={() => setStatus('idle')} 
                                 className="w-full py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-xs"
                             >
-                                生成失败，点击重试
+                                生成过程可能已中断，点击重试
                             </button>
                         )}
-                        <div className="flex items-center gap-1.5 text-[10px] text-amber-500 justify-center mt-2">
-                             <Loader2 className="w-3 h-3 animate-spin" />
-                             <span>生成过程中请勿刷新页面</span>
-                        </div>
+                        {status !== 'error' && (
+                            <div className="flex items-center gap-1.5 text-[10px] text-amber-500 justify-center mt-2">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <span>生成过程中请勿刷新页面</span>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -293,7 +301,14 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
     const [exam, setExam] = useState<ExamSession>(initialExam);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [gradingLoading, setGradingLoading] = useState<Record<string, boolean>>({});
+    
+    // Report Generation State
+    const [isReportOpen, setIsReportOpen] = useState(false);
+    const [reportContent, setReportContent] = useState('');
+    const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+
     const scrollRef = useRef<HTMLDivElement>(null);
+    const reportScrollRef = useRef<HTMLDivElement>(null);
     
     // Auto-save on change
     useEffect(() => {
@@ -306,6 +321,13 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
             scrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
         }
     }, [currentIndex]);
+
+    // Scroll report to bottom when generating
+    useEffect(() => {
+        if (isReportOpen && reportScrollRef.current) {
+            reportScrollRef.current.scrollTo({ top: reportScrollRef.current.scrollHeight, behavior: 'smooth' });
+        }
+    }, [reportContent, isReportOpen]);
 
     const currentQuestion = exam.questions[currentIndex];
 
@@ -528,6 +550,36 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
         }
     };
 
+    const handleGenerateReport = async () => {
+        setIsReportOpen(true);
+        if (reportContent) return; // Don't regenerate if already exists
+        
+        setIsGeneratingReport(true);
+        
+        // Build concise summary for AI
+        const summary = {
+            title: exam.config.title,
+            totalScore: `${totalScore}/${maxScore}`,
+            questions: exam.questions.map((q, i) => ({
+                id: i + 1,
+                knowledgePoint: q.knowledgePoint || '未标注',
+                type: q.type,
+                score: `${q.obtainedScore || 0}/${q.score}`,
+                isCorrect: q.obtainedScore === q.score
+            }))
+        };
+        
+        try {
+            await generateExamReport(summary, aiConfig, (chunk) => {
+                setReportContent(prev => prev + chunk);
+            });
+        } catch (e) {
+            setReportContent("生成报告失败，请检查网络或配置。");
+        } finally {
+            setIsGeneratingReport(false);
+        }
+    };
+
     const totalScore = exam.questions.reduce((acc, q) => acc + (q.obtainedScore || 0), 0);
     const maxScore = exam.questions.reduce((acc, q) => acc + q.score, 0);
 
@@ -669,7 +721,15 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                     <button onClick={onClose} className="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50">
                         暂时离开
                     </button>
-                    {exam.status !== 'submitted' && (
+                    {exam.status === 'submitted' ? (
+                        <button 
+                            onClick={handleGenerateReport} 
+                            className="w-full py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-lg text-sm font-bold hover:shadow-md transition-all flex items-center justify-center gap-2"
+                        >
+                            <BarChart2 className="w-4 h-4" />
+                            生成评价报告
+                        </button>
+                    ) : (
                         <button onClick={handleSubmitAll} disabled={Object.keys(gradingLoading).length > 0} className="w-full py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                             {Object.keys(gradingLoading).length > 0 ? <Loader2 className="w-4 h-4 animate-spin"/> : null}
                             交卷并评分
@@ -776,8 +836,15 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                         <ChevronLeft className="w-6 h-6 text-slate-600" />
                     </button>
                     
-                    {/* Mobile Submit Button in Center */}
-                    {exam.status !== 'submitted' && (
+                    {/* Center Action Button */}
+                    {exam.status === 'submitted' ? (
+                        <button 
+                            onClick={handleGenerateReport} 
+                            className="md:hidden px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2"
+                        >
+                            <BarChart2 className="w-4 h-4" /> 评价报告
+                        </button>
+                    ) : (
                         <button onClick={handleSubmitAll} disabled={Object.keys(gradingLoading).length > 0} className="md:hidden px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2">
                             {Object.keys(gradingLoading).length > 0 ? <Loader2 className="w-4 h-4 animate-spin"/> : null}
                             交卷
@@ -796,6 +863,36 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                     </button>
                 </div>
             </div>
+
+            {/* Report Modal */}
+            {isReportOpen && (
+                <div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                <BarChart2 className="w-5 h-5 text-indigo-600" />
+                                综合学习评价报告
+                            </h3>
+                            <button onClick={() => setIsReportOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6" ref={reportScrollRef}>
+                            {isGeneratingReport && !reportContent ? (
+                                <div className="flex flex-col items-center justify-center h-40 text-slate-400 gap-3">
+                                    <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                                    <span className="animate-pulse">AI 老师正在分析试卷...</span>
+                                </div>
+                            ) : (
+                                <div className="prose prose-slate prose-sm max-w-none">
+                                    <ContentRenderer content={reportContent} />
+                                    {isGeneratingReport && <span className="inline-block w-2 h-4 bg-slate-400 animate-pulse ml-1 align-middle"></span>}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
