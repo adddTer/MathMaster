@@ -199,8 +199,13 @@ You are a JSON data generator for an exam system.
 2. DO NOT include any markdown formatting (no \`\`\`json wrappers).
 3. DO NOT include any explanatory text before or after the JSON.
 4. If you include math, use standard LaTeX (e.g., $x^2$).
-5. Escape all backslashes in JSON strings (e.g., "\\\\alpha").
-6. **MUST USE SIMPLIFIED CHINESE** for all content text (questions, options, analysis).
+5. **CRITICAL JSON ESCAPING**: You MUST escape all backslashes in JSON strings.
+   - CORRECT: "\\\\alpha", "\\\\frac{1}{2}", "\\\\sqrt{x}"
+   - WRONG: "\\alpha", "\\frac{1}{2}", "\\sqrt{x}"
+   - FAILURE TO ESCAPE BACKSLASHES WILL CAUSE SYSTEM ERROR.
+6. **LANGUAGE RULE**: 
+   - If the subject is **English** (e.g., topic contains "English", "Reading Comprehension", "Grammar"), use English for content.
+   - For **ALL OTHER SUBJECTS** (Math, Physics, Chinese, etc.), **YOU MUST USE SIMPLIFIED CHINESE** for all content (questions, options, analysis, feedback).
 `;
 
 // --- UTILITY PROMPTS ---
@@ -208,7 +213,7 @@ You are a JSON data generator for an exam system.
 export const STRICT_REPAIR_SYS_PROMPT = `
 You are a specialized JSON syntax repair engine. You are NOT a chatbot.
 Your ONLY purpose is to take a malformed JSON string and output a syntactically correct JSON string.
-Do not add any explanations. Do not change the data values if possible, only fix the structure (quotes, commas, brackets).
+Do not add any explanations. Do not change the data values if possible, only fix the structure (quotes, commas, brackets) and ESCAPE BACKSLASHES (e.g. change "\\alpha" to "\\\\alpha").
 `;
 
 export const STRICT_GRADER_SYS_PROMPT = (context: string) => `
@@ -227,7 +232,7 @@ Rules:
 1. "score" must be a number between 0 and the max score defined in the user prompt.
 2. If the answer is correct, "score" must be equal to the max score.
 3. If completely wrong, "score" is 0.
-4. "feedback" must be in Chinese (简体中文). Explain the scoring reasoning briefly.
+4. "feedback" must be in **Simplified Chinese** (unless the exam subject is strictly English). Explain the scoring reasoning briefly.
 5. NO Markdown. NO explanations outside JSON.
 `;
 
@@ -262,7 +267,8 @@ Difficulty: ${config.difficultyDistribution}
 - Returns strictly an Array of Objects.
 - "type" must be one of: "single_choice", "multiple_choice", "fill_in", "true_false", "subjective".
 - "score" must be a number.
-- **IMPORTANT**: Ensure "knowledgePoint" and "designIntent" are in Simplified Chinese.
+- **IMPORTANT**: Ensure "knowledgePoint" and "designIntent" are in Simplified Chinese (unless the subject implies English).
+- **JSON SAFETY**: Ensure the JSON is valid. Do not produce an unterminated array.
 `;
 
 export const GENERATOR_PROMPT = (blueprint: QuestionBlueprint) => `
@@ -271,19 +277,21 @@ ${JSON.stringify(blueprint)}
 
 **EXAMPLE OUTPUT** (Output strictly the object, no markdown):
 {
-  "content": "Given $f(x)=x^2$, find:\\n(1) $f(2)$;\\n(2) $f(-2)$.",
+  "content": "已知 $f(x)=x^2$，求：\\n(1) $f(2)$；\\n(2) $f(-2)$。",
   "options": ["A. 1", "B. 2", "C. 4", "D. 8"],
   "correctAnswer": "C",
-  "analysis": "Substitute x=2 into the equation.",
-  "gradingCriteria": "Exact match"
+  "analysis": "将 x=2 代入解析式计算...",
+  "gradingCriteria": "答案完全匹配得满分"
 }
 
 **CRITICAL RULES**:
-1. "content": String. The question text in **Simplified Chinese**. Use "\\n" explicitly for line breaks between sub-questions or distinct parts.
+1. "content": String. The question text. **MUST BE SIMPLIFIED CHINESE** unless the topic is English. Use "\\n" explicitly for line breaks.
 2. "options": Array of Strings. REQUIRED for 'single_choice' and 'multiple_choice'. Must have at least 4 options. Format: "A. xxx".
 3. "correctAnswer": String (for single choice/true false) or Array of Strings (for multiple choice).
-4. "analysis": String. Detailed explanation in **Simplified Chinese**.
-5. All text MUST be in Simplified Chinese.
+4. "analysis": String. Detailed explanation in **Simplified Chinese** (unless English subject).
+5. "gradingCriteria": String. In Chinese.
+6. **MATH LATEX**: Use single dollar signs $...$ for inline math.
+7. **JSON ESCAPING**: You MUST escape all backslashes in JSON strings. Use double backslashes for LaTeX commands (e.g. "\\\\alpha", "\\\\frac").
 `;
 
 export const GRADER_PROMPT = (question: ExamQuestion, userAnswer: any) => `
@@ -296,7 +304,7 @@ Grading Criteria: "${question.gradingCriteria}"
 
 Student Answer: "${JSON.stringify(userAnswer)}"
 
-Provide a score (0 to ${question.score}) and feedback (in Chinese).
+Provide a score (0 to ${question.score}) and feedback (in Simplified Chinese, unless the question is English).
 `;
 
 // --- ESSAY SERVICE PROMPTS ---

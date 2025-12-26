@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ListChecks, Upload, Archive, Plus, FileText, Check, X, Play, MoreVertical, Edit2, Download, Trash2, CheckSquare, Square, MessageSquare, Pin, PinOff } from 'lucide-react';
 import { ChatSession, ExamSession } from '../../types';
@@ -76,7 +77,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         type: 'session'
     });
 
-    const zipInputRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const menuRef = useRef<HTMLDivElement>(null); 
 
     // Close menu on outside click
@@ -164,9 +165,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
              />
              <input 
                 type="file" 
-                ref={zipInputRef} 
+                ref={fileInputRef} 
                 className="hidden" 
-                accept=".zip" 
+                accept=".zip,.json" 
                 onChange={(e) => {
                     if (e.target.files?.[0]) onImportZip(e.target.files[0]);
                     e.target.value = '';
@@ -202,7 +203,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                                  <ListChecks className="w-4 h-4" /> 批量
                              </button>
                              <div className="h-4 w-px bg-slate-200 mx-1"></div>
-                             <button onClick={() => zipInputRef.current?.click()} className="text-slate-500 text-xs font-medium flex items-center gap-1 px-2 py-1 hover:bg-slate-100 rounded-lg transition-colors" title="导入备份 (ZIP)">
+                             <button onClick={() => fileInputRef.current?.click()} className="text-slate-500 text-xs font-medium flex items-center gap-1 px-2 py-1 hover:bg-slate-100 rounded-lg transition-colors" title="导入 (.json/.zip)">
                                  <Upload className="w-4 h-4" /> 导入
                              </button>
                              <button onClick={onExportAll} className="text-slate-500 text-xs font-medium flex items-center gap-1 px-2 py-1 hover:bg-slate-100 rounded-lg transition-colors" title="一键备份 (ZIP)">
@@ -394,7 +395,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                                               {session.isPinned ? <><PinOff className="w-3.5 h-3.5" /> 取消置顶</> : <><Pin className="w-3.5 h-3.5" /> 置顶</>}
                                           </button>
                                           <button 
-                                              onClick={(e) => startEditing(e, session.id, session.title, 'session')} 
+                                              onClick={(e) => startEditing(e, session.id, session.title)} 
                                               className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
                                           >
                                               <Edit2 className="w-3.5 h-3.5" /> 重命名
@@ -407,7 +408,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                                           </button>
                                           <div className="h-px bg-slate-100 my-1"></div>
                                           <button 
-                                              onClick={(e) => { e.stopPropagation(); handleRequestDelete([session.id], 'session'); }} 
+                                              onClick={(e) => { e.stopPropagation(); handleRequestDelete([session.id]); }} 
                                               className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
                                           >
                                               <Trash2 className="w-3.5 h-3.5" /> 删除
@@ -422,4 +423,4 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             </div>
         </div>
     );
-}
+};

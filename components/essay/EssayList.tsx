@@ -60,7 +60,7 @@ export const EssayList: React.FC<EssayListProps> = ({
 
     return (
         <div className="flex flex-col h-full bg-slate-50 relative">
-            <input type="file" ref={fileInputRef} className="hidden" accept=".zip" onChange={(e) => { if (e.target.files?.[0]) onImport(e.target.files[0]); e.target.value = ''; }} />
+            <input type="file" ref={fileInputRef} className="hidden" accept=".zip,.json" onChange={(e) => { if (e.target.files?.[0]) onImport(e.target.files[0]); e.target.value = ''; }} />
 
             {/* Sticky Header */}
             <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 md:px-8 py-4">

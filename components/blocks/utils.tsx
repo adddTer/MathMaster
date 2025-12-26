@@ -31,20 +31,35 @@ export const safeParseJSON = (str: string): { data: any, error: string | null } 
 export const InlineParser: React.FC<{ content: string }> = ({ content }) => {
   if (!content) return null;
 
-  const parts = content.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/g);
+  // Expanded regex to support \[...\] (block) and \(...\) (inline) in addition to $$ and $
+  const parts = content.split(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$[\s\S]*?\$|\\\([\s\S]*?\\\))/g);
 
   return (
     <>
       {parts.map((part, i) => {
+        // Block Math: $$...$$
         if (part.startsWith('$$') && part.endsWith('$$')) {
           const tex = part.slice(2, -2);
           return <MathFormula key={i} tex={tex} block />;
         }
+        // Block Math: \[...\]
+        if (part.startsWith('\\[') && part.endsWith('\\]')) {
+          const tex = part.slice(2, -2);
+          return <MathFormula key={i} tex={tex} block />;
+        }
+        
+        // Inline Math: $...$
         if (part.startsWith('$') && part.endsWith('$')) {
           const tex = part.slice(1, -1);
           return <MathFormula key={i} tex={tex} />;
         }
+        // Inline Math: \(...\)
+        if (part.startsWith('\\(') && part.endsWith('\\)')) {
+          const tex = part.slice(2, -2);
+          return <MathFormula key={i} tex={tex} />;
+        }
         
+        // Markdown Bold: **...**
         const subParts = part.split(/(\*\*[\s\S]*?\*\*)/g);
         return (
           <span key={i}>

@@ -3,33 +3,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ExamConfig, ExamSession, ExamQuestion, AIConfig, QuestionBlueprint } from '../types';
 import { generateExamBlueprint, generateExamQuestion, gradeExamQuestion } from '../services/geminiService';
 import { Loader2, Play, CheckCircle2, AlertCircle, FileText, ChevronRight, ChevronLeft, Save, X, RotateCcw, BrainCircuit, CheckSquare, Square, PenTool, Cpu, RefreshCw, LayoutGrid } from 'lucide-react';
-import { MathFormula } from './MathFormula';
+import { InlineParser } from './blocks/utils';
 
 // --- Helper: Content Renderer for Exams ---
-// Parses string with $LaTeX$, $$LaTeX$$, \[LaTeX\], \(LaTeX\)
+// Uses InlineParser to support LaTeX ($$, $, \[, \() and Markdown (**bold**)
 const ContentRenderer: React.FC<{ content: string; className?: string }> = ({ content, className = '' }) => {
     if (!content) return null;
     
-    // Improved regex to handle \[...\] and \(...\) which Gemini 3.0 often outputs
-    // Split by: $$...$$, \[...\], $...$, \(...\)
-    const parts = content.split(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$[\s\S]*?\$|\\\([\s\S]*?\\\))/g);
-    
     return (
-        <span className={`whitespace-pre-wrap ${className}`}>
-            {parts.map((part, i) => {
-                if ((part.startsWith('$$') && part.endsWith('$$')) || (part.startsWith('\\[') && part.endsWith('\\]'))) {
-                    // Block Math
-                    const tex = part.startsWith('$$') ? part.slice(2, -2) : part.slice(2, -2);
-                    return <MathFormula key={i} tex={tex} block />;
-                }
-                if ((part.startsWith('$') && part.endsWith('$')) || (part.startsWith('\\(') && part.endsWith('\\)'))) {
-                    // Inline Math
-                    const tex = part.startsWith('$') ? part.slice(1, -1) : part.slice(2, -2);
-                    return <MathFormula key={i} tex={tex} />;
-                }
-                return <span key={i}>{part}</span>;
-            })}
-        </span>
+        <div className={`whitespace-pre-wrap leading-relaxed ${className}`}>
+            <InlineParser content={content} />
+        </div>
     );
 };
 
@@ -580,7 +564,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                                     className={className}
                                 >
                                     {isSelected ? <CheckCircle2 className="w-5 h-5 text-indigo-600" /> : <div className="w-5 h-5 rounded-full border border-slate-300" />}
-                                    <span className="text-sm"><ContentRenderer content={String(rawOptText)} /></span>
+                                    <span className="text-sm w-full"><ContentRenderer content={String(rawOptText)} /></span>
                                 </button>
                             );
                         })}
@@ -615,7 +599,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                                     className={className}
                                 >
                                     {isSelected ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5 text-slate-300" />}
-                                    <span className="text-sm"><ContentRenderer content={String(opt)} /></span>
+                                    <span className="text-sm w-full"><ContentRenderer content={String(opt)} /></span>
                                 </button>
                             );
                         })}

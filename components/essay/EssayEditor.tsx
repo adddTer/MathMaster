@@ -169,6 +169,31 @@ export const EssayEditor: React.FC<EssayEditorProps> = ({
     };
     
     const handleImport = (file: File) => {
+        const fileName = file.name.toLowerCase();
+
+        // Single JSON Import
+        if (fileName.endsWith('.json')) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const content = e.target?.result as string;
+                    const json = JSON.parse(content);
+                    if (json.config && json.history) {
+                        const newSession = { ...json, id: Date.now().toString() + Math.random().toString(36).substr(2, 5), updatedAt: Date.now() };
+                        setSessions(prev => [newSession, ...prev]);
+                        alert("导入成功");
+                    } else {
+                        alert("JSON 格式不符合写作项目要求");
+                    }
+                } catch (e) {
+                    alert("JSON 解析失败");
+                }
+            };
+            reader.readAsText(file);
+            return;
+        }
+
+        // ZIP Import
         // @ts-ignore
         if (!window.JSZip) return;
         // @ts-ignore

@@ -22,30 +22,58 @@ const sanitizeError = (error: any): string => {
 };
 
 // --- ROBUST JSON EXTRACTION ---
+
+// Advanced JSON sanitizer that fixes common LLM mistakes with LaTeX
+const sanitizeJsonString = (str: string): string => {
+    let clean = str;
+    
+    // 1. Remove markdown wrappers
+    const codeBlockMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (codeBlockMatch) {
+        clean = codeBlockMatch[1].trim();
+    } else {
+        clean = clean.trim();
+    }
+
+    // 2. Try to recover truncated JSON arrays (Unterminated string)
+    // If it starts with [ but doesn't end with ], try to find the last valid object closing
+    if (clean.startsWith('[') && !clean.endsWith(']')) {
+        const lastCloseObj = clean.lastIndexOf('}');
+        if (lastCloseObj !== -1) {
+            clean = clean.substring(0, lastCloseObj + 1) + ']';
+        }
+    }
+
+    // 3. Fix invalid escapes (The "Bad escaped character" error)
+    // Look for backslashes that are NOT followed by valid escape chars (" \ / b f n r t u)
+    // We want to turn `\a` into `\\a`, `\(` into `\\(`, etc.
+    // Regex explanation:
+    // \\       matches a literal backslash
+    // (?![...]) negative lookahead: NOT followed by valid escape chars
+    clean = clean.replace(/\\(?![/\\"'bfnrtu])/g, "\\\\");
+
+    return clean;
+};
+
 const extractJsonFromText = (text: string): string => {
     if (!text) return "{}";
     
-    // 1. Prioritize extracting from markdown code block ```json ... ``` or ``` ... ```
-    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-    if (codeBlockMatch) {
-        return codeBlockMatch[1].trim();
-    }
+    // Pre-sanitize specifically for LaTeX/JSON issues
+    const sanitized = sanitizeJsonString(text);
 
-    let clean = text.trim();
+    // Standard extraction logic (as backup/refinement)
+    let clean = sanitized.trim();
     
-    // 2. Fallback: Find the first valid starting character for JSON ( { or [ )
-    // We scan from start to find the first { or [
+    // Fallback: Find the first valid starting character for JSON ( { or [ )
     const firstOpenBrace = clean.indexOf('{');
     const firstOpenBracket = clean.indexOf('[');
     
-    // Find the last valid ending character
     const lastCloseBrace = clean.lastIndexOf('}');
     const lastCloseBracket = clean.lastIndexOf(']');
 
     let start = -1;
     let end = -1;
 
-    // Determine if we are looking for an Object or an Array based on which appears first
     if (firstOpenBrace !== -1 && firstOpenBracket !== -1) {
         if (firstOpenBrace < firstOpenBracket) {
             start = firstOpenBrace;
@@ -62,12 +90,27 @@ const extractJsonFromText = (text: string): string => {
         end = lastCloseBracket;
     }
 
-    // Extract the substring if valid indices found
     if (start !== -1 && end !== -1 && end >= start) {
         return clean.substring(start, end + 1);
     }
 
     return clean;
+};
+
+// Safe JSON Parse with retry logic
+const safeJsonParse = (text: string): any => {
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        // Retry with a more aggressive escape fix if first attempt fails
+        // This handles cases like `\text` where `\t` is a tab but `ext` remains
+        const aggressiveFix = text.replace(/\\/g, "\\\\"); // Double ALL backslashes
+        try {
+            return JSON.parse(aggressiveFix);
+        } catch (e2) {
+            throw e; // Throw original error
+        }
+    }
 };
 
 // Test Gemini Connection
@@ -310,7 +353,7 @@ export const evaluateQuizAnswer = async (question: string, userAnswer: string, c
         }
         
         const cleanJson = extractJsonFromText(responseText);
-        const result = JSON.parse(cleanJson);
+        const result = safeJsonParse(cleanJson);
         
         // Robust check: handle if AI returns wrapper
         const finalResult = result.status ? result : (result.grading || result.evaluation || result);
@@ -339,7 +382,7 @@ export const generateExamBlueprint = async (config: ExamConfig, aiConfig: AIConf
         }
 
         const cleanJson = extractJsonFromText(responseText);
-        const parsed = JSON.parse(cleanJson);
+        const parsed = safeJsonParse(cleanJson);
         
         // Smart unwrap if AI wrapped the array in an object
         if (!Array.isArray(parsed)) {
@@ -381,7 +424,7 @@ export const generateExamQuestion = async (
         }
 
         const cleanJson = extractJsonFromText(responseText);
-        const data = JSON.parse(cleanJson);
+        const data = safeJsonParse(cleanJson);
         
         // Smart unwrap
         const questionData = data.question || data;
@@ -449,7 +492,7 @@ export const gradeExamQuestion = async (
         }
 
         const cleanJson = extractJsonFromText(responseText);
-        const data = JSON.parse(cleanJson);
+        const data = safeJsonParse(cleanJson);
         
         // Smart unwrap
         const finalData = data.result || data.grading || data;

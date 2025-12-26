@@ -155,7 +155,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   // Body Scroll Lock for Fullscreen
   useEffect(() => {
-      if (isFullscreen) {
+      if (isFullscreen || activeExam) {
           document.body.style.overflow = 'hidden';
       } else {
           document.body.style.overflow = '';
@@ -163,7 +163,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       return () => {
           document.body.style.overflow = '';
       };
-  }, [isFullscreen]);
+  }, [isFullscreen, activeExam]);
 
   // Save Sessions
   useEffect(() => {
@@ -370,65 +370,111 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
       }
   };
 
-  const handleImportZip = (file: File) => {
-      // @ts-ignore
-      if (!window.JSZip) {
-          showNotify("导入组件未加载，请刷新页面重试", "error");
+  const handleImportFile = async (file: File) => {
+      const fileName = file.name.toLowerCase();
+      
+      // Handle JSON Import
+      if (fileName.endsWith('.json')) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+              try {
+                  const content = e.target?.result as string;
+                  const json = JSON.parse(content);
+                  
+                  if (json.messages && Array.isArray(json.messages)) {
+                      // It's a session
+                      const newSession: ChatSession = {
+                          ...json,
+                          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                          updatedAt: Date.now(),
+                          isPinned: false
+                      };
+                      setSessions(prev => sortSessions([newSession, ...prev]));
+                      showNotify("导入对话成功", "success");
+                  } else if (json.questions && Array.isArray(json.questions)) {
+                      // It's an exam
+                      const newExam: ExamSession = {
+                          ...json,
+                          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                          updatedAt: Date.now()
+                      };
+                      setExams(prev => [newExam, ...prev]);
+                      showNotify("导入试卷成功", "success");
+                  } else {
+                      showNotify("JSON 文件格式不识别", "error");
+                  }
+              } catch (err) {
+                  showNotify("JSON 解析失败", "error");
+              }
+          };
+          reader.readAsText(file);
           return;
       }
 
-      // @ts-ignore
-      const jsZip = new window.JSZip();
-      jsZip.loadAsync(file).then(async (zip: any) => {
-          const newSessions: ChatSession[] = [];
-          const newExams: ExamSession[] = [];
-          
-          const promises: Promise<void>[] = [];
-          zip.forEach((relativePath: string, zipEntry: any) => {
-              if (!zipEntry.dir && zipEntry.name.endsWith('.json')) {
-                  promises.push(
-                      zipEntry.async("string").then((content: string) => {
-                          try {
-                              const json = JSON.parse(content);
-                              if (Array.isArray(json.messages)) {
-                                  newSessions.push({
-                                      ...json,
-                                      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                                      updatedAt: Date.now(),
-                                      isPinned: false
-                                  });
-                              } else if (json.questions && Array.isArray(json.questions)) {
-                                  newExams.push({
-                                      ...json,
-                                      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                                      updatedAt: Date.now()
-                                  });
-                              }
-                          } catch (err) {
-                              console.warn("Skipping invalid JSON:", relativePath);
-                          }
-                      })
-                  );
-              }
-          });
+      // Handle ZIP Import
+      if (fileName.endsWith('.zip')) {
+          // @ts-ignore
+          if (!window.JSZip) {
+              showNotify("导入组件未加载，请刷新页面重试", "error");
+              return;
+          }
 
-          await Promise.all(promises);
-          
-          if (newSessions.length > 0) {
-              setSessions(prev => sortSessions([...newSessions, ...prev]));
-          }
-          if (newExams.length > 0) {
-              setExams(prev => [...newExams, ...prev]);
-          }
-          
-          if (newSessions.length > 0 || newExams.length > 0) {
-              showNotify(`导入成功: ${newSessions.length} 个对话, ${newExams.length} 份试卷`, "success");
-          } else {
-              showNotify("压缩包中未找到有效文件", "info");
-          }
-      }).catch((e: any) => {
-          showNotify("文件解析失败", "error");
-      });
+          // @ts-ignore
+          const jsZip = new window.JSZip();
+          jsZip.loadAsync(file).then(async (zip: any) => {
+              const newSessions: ChatSession[] = [];
+              const newExams: ExamSession[] = [];
+              
+              const promises: Promise<void>[] = [];
+              zip.forEach((relativePath: string, zipEntry: any) => {
+                  if (!zipEntry.dir && zipEntry.name.endsWith('.json')) {
+                      promises.push(
+                          zipEntry.async("string").then((content: string) => {
+                              try {
+                                  const json = JSON.parse(content);
+                                  if (Array.isArray(json.messages)) {
+                                      newSessions.push({
+                                          ...json,
+                                          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                                          updatedAt: Date.now(),
+                                          isPinned: false
+                                      });
+                                  } else if (json.questions && Array.isArray(json.questions)) {
+                                      newExams.push({
+                                          ...json,
+                                          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                                          updatedAt: Date.now()
+                                      });
+                                  }
+                              } catch (err) {
+                                  console.warn("Skipping invalid JSON:", relativePath);
+                              }
+                          })
+                      );
+                  }
+              });
+
+              await Promise.all(promises);
+              
+              if (newSessions.length > 0) {
+                  setSessions(prev => sortSessions([...newSessions, ...prev]));
+              }
+              if (newExams.length > 0) {
+                  setExams(prev => [...newExams, ...prev]);
+              }
+              
+              if (newSessions.length > 0 || newExams.length > 0) {
+                  showNotify(`导入成功: ${newSessions.length} 个对话, ${newExams.length} 份试卷`, "success");
+              } else {
+                  showNotify("压缩包中未找到有效文件", "info");
+              }
+          }).catch((e: any) => {
+              showNotify("文件解析失败", "error");
+          });
+          return;
+      }
+      
+      showNotify("不支持的文件格式", "error");
   };
 
   // --- Session Management Handlers ---
@@ -772,7 +818,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
   const renderMainContent = () => (
     <div 
         className={`flex flex-col h-full bg-slate-50 relative`}
-        style={isFullscreen ? { 
+        style={(isFullscreen || activeExam) ? { 
             position: 'fixed', 
             top: 0, 
             left: 0, 
@@ -819,7 +865,7 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
               onSelectExam={(ex) => setActiveExam(ex)}
               onClose={() => setIsHistoryView(false)}
               onNewChat={handleNewChat}
-              onImportZip={handleImportZip}
+              onImportZip={handleImportFile}
               onExportAll={() => generateZipExport(sessions)}
               onExportBatch={(ids) => generateZipExport(sessions.filter(s => ids.includes(s.id)))}
               onExportSingle={handleExportSingle}
@@ -865,8 +911,8 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
     </div>
   );
 
-  // Portal Logic: Only when fullscreen is active
-  if (isFullscreen) {
+  // Portal Logic: Only when fullscreen is active or an exam is running
+  if (isFullscreen || activeExam) {
       // Use createPortal to move content to body
       return createPortal(renderMainContent(), document.body);
   }
