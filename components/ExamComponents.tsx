@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ExamConfig, ExamSession, ExamQuestion, AIConfig, QuestionBlueprint } from '../types';
 import { generateExamBlueprint, generateExamQuestion, gradeExamQuestion, generateExamReport } from '../services/geminiService';
-import { Loader2, Play, CheckCircle2, AlertCircle, FileText, ChevronRight, ChevronLeft, Save, X, RotateCcw, BrainCircuit, CheckSquare, Square, PenTool, Cpu, RefreshCw, LayoutGrid, BarChart2 } from 'lucide-react';
+import { Loader2, Play, CheckCircle2, AlertCircle, FileText, ChevronRight, ChevronLeft, Save, X, RotateCcw, BrainCircuit, CheckSquare, Square, PenTool, Cpu, RefreshCw, LayoutGrid, BarChart2, RefreshCcw } from 'lucide-react';
 import { InlineParser } from './blocks/utils';
 
 // --- Helper: Content Renderer for Exams ---
@@ -452,9 +452,10 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
     };
 
     const handleSubmitAll = async () => {
-        // 1. Identify questions that need grading
+        // 1. Identify ALL questions that need grading (including empty ones)
+        // Fix: Do NOT filter out questions with empty answers. We must grade everything to finish the exam.
         const questionsToGrade = exam.questions.map((q, index) => ({ q, index }))
-            .filter(({ q }) => !q.isGraded && q.userAnswer !== undefined && q.userAnswer !== "");
+            .filter(({ q }) => !q.isGraded);
 
         if (questionsToGrade.length === 0) {
              setExam(prev => ({ ...prev, status: 'submitted' }));
@@ -472,6 +473,15 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
             // 3. Perform grading in PARALLEL
             const results = await Promise.all(
                 questionsToGrade.map(async ({ q, index }) => {
+                    // Handle Unanswered: Instant 0 score
+                    if (!q.userAnswer || (Array.isArray(q.userAnswer) && q.userAnswer.length === 0)) {
+                        return {
+                            index,
+                            score: 0,
+                            feedback: "未作答"
+                        };
+                    }
+
                     // Re-implement grading logic here to allow pure data transformation
                     // Choice/TrueFalse: Local Grading
                     if (q.type === 'multiple_choice') {
@@ -550,22 +560,29 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
         }
     };
 
-    const handleGenerateReport = async () => {
+    const handleGenerateReport = async (forceRegenerate = false) => {
         setIsReportOpen(true);
-        if (reportContent) return; // Don't regenerate if already exists
+        if (reportContent && !forceRegenerate) return; // Don't regenerate if already exists unless forced
         
         setIsGeneratingReport(true);
+        if (forceRegenerate) setReportContent(''); // Clear previous if regenerating
         
-        // Build concise summary for AI
+        // Build concise summary for AI, now including context
         const summary = {
             title: exam.config.title,
             totalScore: `${totalScore}/${maxScore}`,
             questions: exam.questions.map((q, i) => ({
                 id: i + 1,
+                // Provide truncated content to save tokens but give context
+                questionText: q.content.length > 80 ? q.content.slice(0, 80) + '...' : q.content,
                 knowledgePoint: q.knowledgePoint || '未标注',
                 type: q.type,
+                // Include answers so AI knows *why* it was wrong
+                userAnswer: q.userAnswer ? JSON.stringify(q.userAnswer) : "未作答",
+                correctAnswer: JSON.stringify(q.correctAnswer), 
                 score: `${q.obtainedScore || 0}/${q.score}`,
-                isCorrect: q.obtainedScore === q.score
+                isCorrect: q.obtainedScore === q.score,
+                feedback: q.feedback
             }))
         };
         
@@ -723,7 +740,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                     </button>
                     {exam.status === 'submitted' ? (
                         <button 
-                            onClick={handleGenerateReport} 
+                            onClick={() => handleGenerateReport()} 
                             className="w-full py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-lg text-sm font-bold hover:shadow-md transition-all flex items-center justify-center gap-2"
                         >
                             <BarChart2 className="w-4 h-4" />
@@ -839,7 +856,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                     {/* Center Action Button */}
                     {exam.status === 'submitted' ? (
                         <button 
-                            onClick={handleGenerateReport} 
+                            onClick={() => handleGenerateReport()} 
                             className="md:hidden px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2"
                         >
                             <BarChart2 className="w-4 h-4" /> 评价报告
@@ -873,9 +890,20 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                                 <BarChart2 className="w-5 h-5 text-indigo-600" />
                                 综合学习评价报告
                             </h3>
-                            <button onClick={() => setIsReportOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
-                                <X className="w-5 h-5" />
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {!isGeneratingReport && reportContent && (
+                                    <button 
+                                        onClick={() => handleGenerateReport(true)} 
+                                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                        title="重新生成"
+                                    >
+                                        <RefreshCcw className="w-4 h-4" />
+                                    </button>
+                                )}
+                                <button onClick={() => setIsReportOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-6" ref={reportScrollRef}>
                             {isGeneratingReport && !reportContent ? (

@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { ExternalLink, Feather, Sparkles } from 'lucide-react';
-import { ExamGeneratorBlock } from '../../components/ExamComponents';
+import { ExamGeneratorBlock } from '../exam/ExamGenerator';
 import { safeParseJSON, ErrorBlock } from './utils';
 
 export const ExamConfigBlock: React.FC<{ content: string; onInteract?: (a:string, p?:any) => void; savedState?: any; aiConfig: any; availableModels?: any }> = ({ content, onInteract, savedState, aiConfig, availableModels }) => {

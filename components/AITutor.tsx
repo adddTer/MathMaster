@@ -3,9 +3,10 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertCircle, Info, Minimize2, Maximize2 } from 'lucide-react';
 import { ChatMessage, AIConfig, AIProvider, ChatSession, ExamSession, SubjectType } from '../types';
-import { sendMessageToGeminiStream, repairMalformedJson, evaluateQuizAnswer } from '../services/geminiService';
+import { sendMessageToGeminiStream, evaluateQuizAnswer } from '../services/geminiService';
+import { repairMalformedJson } from '../services/geminiServiceUtils';
 import { blockRegex } from './MessageRenderer';
-import { ExamRunner } from './ExamComponents';
+import { ExamRunner } from './exam/ExamRunner';
 import { SettingsView } from './ai-tutor/SettingsView';
 import { HistoryView } from './ai-tutor/HistoryView';
 import { ChatHeader } from './ai-tutor/ChatHeader';
@@ -578,7 +579,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
     let accumulatedResponse = '';
     
-    // Inject full curriculum summary so the AI knows what knowledge points exist for exams.
     const fullContext = `${currentContext}\n\n【当前学科完整目录参考】\n${currentContext.includes('语文') ? getChineseCurriculumSummary() : getCurriculumSummary()}`;
 
     // Output Buffer for smoother rendering
@@ -913,7 +913,6 @@ export const AITutor: React.FC<AITutorProps> = ({ currentContext, initialQuery, 
 
   // Portal Logic: Only when fullscreen is active or an exam is running
   if (isFullscreen || activeExam) {
-      // Use createPortal to move content to body
       return createPortal(renderMainContent(), document.body);
   }
 

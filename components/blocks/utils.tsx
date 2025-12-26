@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MathFormula } from '../MathFormula';
 import { Loader2, RefreshCcw, ShieldAlert, XCircle, Copy, Check } from 'lucide-react';
 
@@ -213,43 +213,44 @@ export const ErrorBlock = ({
 }) => {
     const retryCount = savedState?.retryCount || 0;
     const isRepairing = savedState?.isRepairing || false;
+    // Track if we've initiated auto-repair on mount
+    const [hasInitiatedAutoRepair, setHasInitiatedAutoRepair] = useState(false);
 
     useEffect(() => {
-        if (onInteract && retryCount < 3 && !isRepairing) {
-            const timer = setTimeout(() => {
-                onInteract('fix_json', { brokenContent: content, error: errorMsg });
-            }, 1000);
-            return () => clearTimeout(timer);
+        // Immediate auto-repair on first encounter (retryCount === 0)
+        // We only trigger this once per mount if not already repairing
+        if (onInteract && retryCount === 0 && !isRepairing && !hasInitiatedAutoRepair) {
+            setHasInitiatedAutoRepair(true);
+            onInteract('fix_json', { brokenContent: content, error: errorMsg });
         }
-    }, [retryCount, isRepairing]);
+    }, [retryCount, isRepairing, hasInitiatedAutoRepair]);
 
-    if (isRepairing) {
+    // Show simplified loading state for the first attempt to avoid jarring "Error" UI
+    if (retryCount === 0 || isRepairing) {
         return (
-            <div className="my-4 p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3 animate-pulse">
+            <div className="my-4 p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3">
                 <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                <span className="text-xs text-slate-500">正在修复题目格式...</span>
+                <span className="text-xs text-slate-500">正在优化内容展示...</span>
             </div>
         );
     }
 
+    // Only show the red error block if we've failed at least once (retryCount > 0)
     return (
-        <div className={`my-4 p-4 border rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2 ${retryCount >= 3 ? 'bg-slate-50 border-slate-200' : 'bg-red-50 border-red-100'}`}>
-            <span className={`text-xs flex items-center gap-2 ${retryCount >= 3 ? 'text-slate-500' : 'text-red-600'}`}>
-                {retryCount >= 3 ? (
-                    <><XCircle className="w-4 h-4" /> 格式修复失败 ({retryCount}次)，已放弃</>
-                ) : (
-                    <><ShieldAlert className="w-4 h-4" /> 格式错误，准备修复 ({retryCount}/3)...</>
-                )}
+        <div className="my-4 p-4 border rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2 bg-red-50 border-red-100">
+            <span className="text-xs flex items-center gap-2 text-red-600">
+                <ShieldAlert className="w-4 h-4" /> 
+                {retryCount >= 3 ? "内容格式修复失败" : `格式错误，请重试 (${retryCount}/3)`}
             </span>
-            {retryCount >= 3 && onInteract && (
+            {onInteract && (
                 <button 
                     onClick={() => {
                         onInteract('fix_json', { brokenContent: content, error: errorMsg });
-                        onInteract('update_state', { state: { retryCount: 0, isRepairing: true } });
+                        onInteract('update_state', { state: { isRepairing: true } });
                     }}
-                    className="px-3 py-1 bg-white border border-slate-200 text-slate-600 text-xs rounded-full hover:bg-slate-100 flex items-center gap-1"
+                    className="px-3 py-1 bg-white border border-red-200 text-red-600 text-xs rounded-full hover:bg-red-50 flex items-center gap-1 transition-colors"
                 >
-                    <RefreshCcw className="w-3 h-3" /> 手动重试
+                    <RefreshCcw className="w-3 h-3" /> 重试修复
                 </button>
             )}
         </div>

@@ -1,5 +1,6 @@
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Maximize2, Minimize2, SlidersHorizontal, MousePointer2, X, Target, Plus, Minus } from 'lucide-react';
 import { MathFormula } from './MathFormula';
 
@@ -195,7 +196,7 @@ export const FunctionPlot: React.FC<FunctionPlotProps> = ({
 
     // Helper for coordinate mapping
     const getMap = (width: number, height: number) => {
-        const padding = 40; // Increased padding slightly
+        const padding = 40; 
         const [xMin, xMax] = config.xDomain || [-5, 5];
         const [yMin, yMax] = config.yDomain || [-5, 5];
         return {
@@ -204,8 +205,11 @@ export const FunctionPlot: React.FC<FunctionPlotProps> = ({
         };
     };
 
-    // --- Drawing Logic ---
-    const drawPlot = (width: number, height: number, isDark: boolean) => {
+    // --- Drawing Logic (Memoized) ---
+    // We separate the heavy path calculation from the render cycle that might update due to mouse moves
+    const memoizedPlotSvg = useMemo(() => {
+        const { width, height } = dimensions;
+        const isDark = false; // can be made dynamic
         const { mapX, mapY } = getMap(width, height);
         const padding = 40;
 
@@ -223,7 +227,8 @@ export const FunctionPlot: React.FC<FunctionPlotProps> = ({
         // Paths
         const paths = config.functions.map((func, idx) => {
             const points: string[] = [];
-            const step = (xMax - xMin) / (width * 1.5);
+            // High resolution sampling
+            const step = (xMax - xMin) / (width * 3); 
             let isDrawing = false;
             
             for (let x = xMin; x <= xMax; x += step) {
@@ -234,15 +239,17 @@ export const FunctionPlot: React.FC<FunctionPlotProps> = ({
                 }
                 const svgX = mapX(x);
                 const svgY = mapY(y);
+                
                 if (svgY < -height || svgY > height * 2) {
                     isDrawing = false;
                     continue;
                 }
+                
                 if (!isDrawing) {
-                    points.push(`M ${svgX.toFixed(1)} ${svgY.toFixed(1)}`);
+                    points.push(`M ${svgX.toFixed(3)} ${svgY.toFixed(3)}`);
                     isDrawing = true;
                 } else {
-                    points.push(`L ${svgX.toFixed(1)} ${svgY.toFixed(1)}`);
+                    points.push(`L ${svgX.toFixed(3)} ${svgY.toFixed(3)}`);
                 }
             }
             return {
@@ -281,7 +288,7 @@ export const FunctionPlot: React.FC<FunctionPlotProps> = ({
                 ))}
             </svg>
         );
-    };
+    }, [dimensions.width, dimensions.height, config, variables]); 
 
     // --- Interactive State ---
     
@@ -331,171 +338,174 @@ export const FunctionPlot: React.FC<FunctionPlotProps> = ({
         };
     }, [mousePos, isFullscreen, config, variables, intersections, dimensions]);
 
-    return (
-        <>
-            {isFullscreen && (
-                <div className="fixed inset-0 z-[100] bg-white flex text-slate-800 font-sans">
-                    {/* Main Plot Area */}
-                    <div 
-                        ref={containerRef}
-                        className="flex-1 relative cursor-crosshair overflow-hidden"
-                        onMouseMove={(e) => {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-                        }}
-                        onTouchMove={(e) => {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setMousePos({ x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top });
-                        }}
-                        onMouseLeave={() => setMousePos(null)}
-                        onTouchEnd={() => setMousePos(null)}
-                    >
-                        <div className="absolute inset-0">
-                            {drawPlot(dimensions.width, dimensions.height, false)}
-                        </div>
-                        
-                        <button 
-                            onClick={() => setIsFullscreen(false)}
-                            className="absolute top-4 right-4 p-2 bg-white/80 hover:bg-slate-100 rounded-full text-slate-600 shadow-sm border border-slate-200 transition-colors z-20"
+    // Fullscreen View (Using Portal to escape parent container constraints)
+    const FullscreenView = () => (
+        <div className="fixed inset-0 z-[99999] bg-white flex text-slate-800 font-sans">
+            {/* Main Plot Area */}
+            <div 
+                ref={containerRef}
+                className="flex-1 relative cursor-crosshair overflow-hidden"
+                onMouseMove={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                }}
+                onTouchMove={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setMousePos({ x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top });
+                }}
+                onMouseLeave={() => setMousePos(null)}
+                onTouchEnd={() => setMousePos(null)}
+            >
+                <div className="absolute inset-0">
+                    {memoizedPlotSvg}
+                </div>
+                
+                <button 
+                    onClick={() => setIsFullscreen(false)}
+                    className="absolute top-4 right-4 p-2 bg-white/80 hover:bg-slate-100 rounded-full text-slate-600 shadow-sm border border-slate-200 transition-colors z-20"
+                >
+                    <Minimize2 className="w-6 h-6" />
+                </button>
+
+                <div className="absolute top-4 left-4 z-10 md:hidden bg-slate-800/80 text-white px-3 py-1 rounded-full text-xs pointer-events-none backdrop-blur-sm">
+                    旋转手机以获得最佳体验
+                </div>
+
+                {/* Crosshair & Tooltip */}
+                {activeState && mousePos && (
+                    <>
+                        <div 
+                            className="absolute top-0 bottom-0 w-px bg-slate-400 pointer-events-none border-l border-dashed border-slate-400" 
+                            style={{ left: activeState.screenX }} 
+                        />
+                        <div 
+                            className="absolute top-16 left-4 bg-white/95 border border-slate-200 p-4 rounded-xl text-sm shadow-xl backdrop-blur pointer-events-none min-w-[200px] z-50"
                         >
-                            <Minimize2 className="w-6 h-6" />
-                        </button>
-
-                        <div className="absolute top-4 left-4 z-10 md:hidden bg-slate-800/80 text-white px-3 py-1 rounded-full text-xs pointer-events-none backdrop-blur-sm">
-                            旋转手机以获得最佳体验
+                            <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-2">
+                                <MathFormula tex={`x = ${activeState.x.toFixed(3)}`} className="font-mono text-slate-500 font-bold" />
+                            </div>
+                            <div className="space-y-1.5">
+                                {activeState.ys.map((v, i) => (
+                                    <div key={i} className={`flex items-center justify-between gap-3 font-mono ${activeState.intersection && (i === activeState.intersection.fIdx1 || i === activeState.intersection.fIdx2) ? 'bg-amber-50 rounded px-1 -mx-1' : ''}`}>
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <div className={`w-2 h-2 rounded-full bg-${v.color}-500 shrink-0`}></div>
+                                            <div className="opacity-80 text-xs text-slate-500 truncate max-w-[120px]">
+                                                {v.label.startsWith('y=') || v.label.includes('\\') || v.label.includes('f') ? <MathFormula tex={v.label} /> : v.label}
+                                            </div>
+                                        </div>
+                                        <span className="font-bold text-slate-700">{v.val.toFixed(3)}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-
-                        {/* Crosshair & Tooltip */}
-                        {activeState && mousePos && (
+                        {activeState.intersection && (
                             <>
                                 <div 
-                                    className="absolute top-0 bottom-0 w-px bg-slate-400 pointer-events-none border-l border-dashed border-slate-400" 
-                                    style={{ left: activeState.screenX }} 
+                                    className="absolute w-3 h-3 rounded-full border-2 border-amber-500 bg-white -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 shadow-sm"
+                                    style={{ 
+                                        left: activeState.screenX, 
+                                        top: activeState.intersectionScreenY 
+                                    }}
                                 />
                                 <div 
-                                    className="absolute top-16 left-4 bg-white/95 border border-slate-200 p-4 rounded-xl text-sm shadow-xl backdrop-blur pointer-events-none min-w-[200px]"
+                                    className="absolute z-20 px-2 py-1.5 bg-slate-800 text-white text-xs rounded-lg shadow-xl transform -translate-x-1/2 -translate-y-full mt-[-10px] whitespace-nowrap pointer-events-none"
+                                    style={{ 
+                                        left: activeState.screenX, 
+                                        top: activeState.intersectionScreenY 
+                                    }}
                                 >
-                                    <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-2">
-                                        <MathFormula tex={`x = ${activeState.x.toFixed(3)}`} className="font-mono text-slate-500 font-bold" />
+                                    <div className="flex items-center gap-1 font-mono font-bold">
+                                        <Target className="w-3 h-3 text-amber-400" />
+                                        <span>({activeState.intersection.x.toFixed(3)}, {activeState.intersection.y.toFixed(3)})</span>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        {activeState.ys.map((v, i) => (
-                                            <div key={i} className={`flex items-center justify-between gap-3 font-mono ${activeState.intersection && (i === activeState.intersection.fIdx1 || i === activeState.intersection.fIdx2) ? 'bg-amber-50 rounded px-1 -mx-1' : ''}`}>
-                                                <div className="flex items-center gap-2 overflow-hidden">
-                                                    <div className={`w-2 h-2 rounded-full bg-${v.color}-500 shrink-0`}></div>
-                                                    <div className="opacity-80 text-xs text-slate-500 truncate max-w-[120px]">
-                                                        {v.label.startsWith('y=') || v.label.includes('\\') || v.label.includes('f') ? <MathFormula tex={v.label} /> : v.label}
-                                                    </div>
-                                                </div>
-                                                <span className="font-bold text-slate-700">{v.val.toFixed(3)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1 w-2 h-2 bg-slate-800 rotate-45"></div>
                                 </div>
-                                {activeState.intersection && (
-                                    <>
-                                        <div 
-                                            className="absolute w-3 h-3 rounded-full border-2 border-amber-500 bg-white -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 shadow-sm"
-                                            style={{ 
-                                                left: activeState.screenX, 
-                                                top: activeState.intersectionScreenY 
-                                            }}
-                                        />
-                                        <div 
-                                            className="absolute z-20 px-2 py-1.5 bg-slate-800 text-white text-xs rounded-lg shadow-xl transform -translate-x-1/2 -translate-y-full mt-[-10px] whitespace-nowrap pointer-events-none"
-                                            style={{ 
-                                                left: activeState.screenX, 
-                                                top: activeState.intersectionScreenY 
-                                            }}
-                                        >
-                                            <div className="flex items-center gap-1 font-mono font-bold">
-                                                <Target className="w-3 h-3 text-amber-400" />
-                                                <span>({activeState.intersection.x.toFixed(3)}, {activeState.intersection.y.toFixed(3)})</span>
-                                            </div>
-                                            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1 w-2 h-2 bg-slate-800 rotate-45"></div>
-                                        </div>
-                                    </>
-                                )}
                             </>
                         )}
+                    </>
+                )}
+            </div>
+
+            {/* Sidebar Controls (Hidden on Mobile, always on desktop) */}
+            <div className="hidden md:block w-[300px] bg-slate-50 border-l border-slate-200 p-6 overflow-y-auto shrink-0 shadow-[-5px_0_15px_-5px_rgba(0,0,0,0.05)]">
+                <h3 className="font-bold text-lg mb-6 flex items-center gap-2 text-slate-800">
+                    <SlidersHorizontal className="w-5 h-5 text-primary-500" />
+                    参数控制
+                </h3>
+                
+                {config.variables && Object.keys(config.variables).length > 0 ? (
+                    <div className="space-y-8">
+                        {Object.entries(config.variables).map(([key, conf]) => (
+                            <div key={key}>
+                                <div className="flex justify-between mb-3 text-sm">
+                                    <span className="font-bold text-slate-700">
+                                        {conf.label || key}
+                                    </span>
+                                    <span className="font-mono text-primary-600 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm min-w-[60px] text-center">
+                                        {key}={variables[key].toFixed(1)}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <button 
+                                        onClick={() => handleVarChange(key, Math.max(conf.min, variables[key] - (conf.step||0.1)))}
+                                        className="p-1 rounded hover:bg-slate-200 text-slate-400 transition-colors"
+                                    >
+                                        <Minus className="w-3 h-3" />
+                                    </button>
+                                    <input 
+                                        type="range"
+                                        min={conf.min}
+                                        max={conf.max}
+                                        step={conf.step || 0.1}
+                                        value={variables[key]}
+                                        onChange={(e) => handleVarChange(key, parseFloat(e.target.value))}
+                                        className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary-600 min-w-0"
+                                    />
+                                    <button 
+                                        onClick={() => handleVarChange(key, Math.min(conf.max, variables[key] + (conf.step||0.1)))}
+                                        className="p-1 rounded hover:bg-slate-200 text-slate-400 transition-colors"
+                                    >
+                                        <Plus className="w-3 h-3" />
+                                    </button>
+                                </div>
+                                <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono px-8">
+                                    <span>{conf.min}</span>
+                                    <span>{conf.max}</span>
+                                </div>
+                            </div>
+                        ))}
                     </div>
+                ) : (
+                    <div className="text-slate-400 text-sm text-center py-10 bg-white rounded-xl border border-slate-100 border-dashed">
+                        当前图像无动态参数
+                    </div>
+                )}
 
-                    {/* Sidebar Controls (Hidden on Mobile, always on desktop) */}
-                    <div className="hidden md:block w-[300px] bg-slate-50 border-l border-slate-200 p-6 overflow-y-auto shrink-0 shadow-[-5px_0_15px_-5px_rgba(0,0,0,0.05)]">
-                        <h3 className="font-bold text-lg mb-6 flex items-center gap-2 text-slate-800">
-                            <SlidersHorizontal className="w-5 h-5 text-primary-500" />
-                            参数控制
-                        </h3>
-                        
-                        {config.variables && Object.keys(config.variables).length > 0 ? (
-                            <div className="space-y-8">
-                                {Object.entries(config.variables).map(([key, conf]) => (
-                                    <div key={key}>
-                                        <div className="flex justify-between mb-3 text-sm">
-                                            <span className="font-bold text-slate-700">
-                                                {conf.label || key}
-                                            </span>
-                                            <span className="font-mono text-primary-600 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm min-w-[60px] text-center">
-                                                {key}={variables[key].toFixed(1)}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <button 
-                                                onClick={() => handleVarChange(key, Math.max(conf.min, variables[key] - (conf.step||0.1)))}
-                                                className="p-1 rounded hover:bg-slate-200 text-slate-400 transition-colors"
-                                            >
-                                                <Minus className="w-3 h-3" />
-                                            </button>
-                                            <input 
-                                                type="range"
-                                                min={conf.min}
-                                                max={conf.max}
-                                                step={conf.step || 0.1}
-                                                value={variables[key]}
-                                                onChange={(e) => handleVarChange(key, parseFloat(e.target.value))}
-                                                className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary-600 min-w-0"
-                                            />
-                                            <button 
-                                                onClick={() => handleVarChange(key, Math.min(conf.max, variables[key] + (conf.step||0.1)))}
-                                                className="p-1 rounded hover:bg-slate-200 text-slate-400 transition-colors"
-                                            >
-                                                <Plus className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                        <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono px-8">
-                                            <span>{conf.min}</span>
-                                            <span>{conf.max}</span>
-                                        </div>
-                                    </div>
-                                ))}
+                <div className="mt-8 pt-6 border-t border-slate-200">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 tracking-wider">当前函数</h4>
+                    <div className="space-y-3">
+                        {config.functions.map((f, i) => (
+                            <div key={i} className="flex items-center gap-2 text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
+                                <div className={`w-3 h-3 rounded-full shrink-0 bg-${f.color}-500 ring-2 ring-white shadow-sm`}></div>
+                                <MathFormula tex={f.label} />
                             </div>
-                        ) : (
-                            <div className="text-slate-400 text-sm text-center py-10 bg-white rounded-xl border border-slate-100 border-dashed">
-                                当前图像无动态参数
-                            </div>
-                        )}
-
-                        <div className="mt-8 pt-6 border-t border-slate-200">
-                            <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 tracking-wider">当前函数</h4>
-                            <div className="space-y-3">
-                                {config.functions.map((f, i) => (
-                                    <div key={i} className="flex items-center gap-2 text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
-                                        <div className={`w-3 h-3 rounded-full shrink-0 bg-${f.color}-500 ring-2 ring-white shadow-sm`}></div>
-                                        <MathFormula tex={f.label} />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        ))}
                     </div>
                 </div>
-            )}
+            </div>
+        </div>
+    );
+
+    return (
+        <>
+            {isFullscreen && createPortal(<FullscreenView />, document.body)}
             
             {/* Inline (Normal) View */}
             <div className="flex flex-col items-center my-6 w-full group">
                 <div className="relative w-full aspect-[16/10] md:aspect-[2/1] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:border-primary-200 transition-all">
                     {/* Plot Canvas */}
                     <div className="absolute inset-0 p-2">
-                        {drawPlot(400, 250, false)}
+                        {memoizedPlotSvg}
                     </div>
 
                     {/* Fullscreen Button */}
