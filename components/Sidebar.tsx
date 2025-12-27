@@ -30,7 +30,7 @@ const MODULES: Record<SubjectType, string[]> = {
     math: ['全部', '前置知识', '必修第一册', '必修第二册', '选择性必修'],
     chinese: ['全部', '必修上册', '必修下册'],
     english: ['全部', '必修一', '必修二', '必修三'],
-    physics: ['全部', '必修一', '必修二', '必修三'],
+    physics: ['全部', '必修第一册', '必修第二册', '必修第三册'],
     chemistry: ['全部', '必修一', '必修二'],
     biology: ['全部', '必修一', '必修二'],
 };
@@ -48,20 +48,31 @@ const chineseToNumber = (str: string): number => {
     return 0;
 };
 
-// Helper to map categories to Math books
-const getMathModule = (category: string): string => {
-    if (category.includes('前置')) return '前置知识';
-    
-    const chapterNum = chineseToNumber(category);
-    if (chapterNum > 0) {
-        if (chapterNum <= 8) return '必修第一册'; // Ch 1-8
-        if (chapterNum <= 15) return '必修第二册'; // Ch 9-15
-        return '选择性必修';
+// Helper to map categories to Books
+const getModuleForCategory = (subject: SubjectType, category: string): string => {
+    // Math Logic
+    if (subject === 'math') {
+        if (category.includes('前置')) return '前置知识';
+        const chapterNum = chineseToNumber(category);
+        if (chapterNum > 0) {
+            if (chapterNum <= 8) return '必修第一册'; // Ch 1-8
+            if (chapterNum <= 15) return '必修第二册'; // Ch 9-15
+            return '选择性必修';
+        }
+        if (category.includes('集合') || category.includes('函数')) return '必修第一册';
     }
-    
-    // Fallback for named categories if any
-    if (category.includes('集合') || category.includes('函数')) return '必修第一册';
-    
+
+    // Physics Logic (Simple Chapter Based)
+    if (subject === 'physics') {
+        if (category.includes('公式') || category.includes('汇总')) return '必修第一册'; // Summary goes to Book 1 by default
+        const chapterNum = chineseToNumber(category);
+        if (chapterNum > 0) {
+            if (chapterNum <= 4) return '必修第一册'; // Ch 1-4: Motion, Force, Newton
+            if (chapterNum <= 8) return '必修第二册'; // Curved motion, Energy
+            return '必修第三册'; // Electromagnetism basics
+        }
+    }
+
     return '其他';
 };
 
@@ -123,11 +134,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       // Filter Logic
       let shouldShow = true;
       if (activeModule !== '全部') {
-          if (currentSubject === 'math') {
-              const book = getMathModule(topic.category);
-              if (book !== activeModule) shouldShow = false;
-          }
-          // Add logic for other subjects here if needed
+          const book = getModuleForCategory(currentSubject, topic.category);
+          // If mapping fails (returns '其他') or doesn't match active module, hide it
+          // Unless for Math where we have explicit logic above, strict matching is okay.
+          // Relaxed matching for physics just in case:
+          if (book !== activeModule && book !== '其他') shouldShow = false;
+          // If logic returns '其他', maybe we show it in '全部' only, or handle specific fallbacks
+          if (book === '其他') shouldShow = false; 
       }
 
       if (shouldShow) {

@@ -5,6 +5,7 @@ import { AITutor } from './components/AITutor';
 import { EssayEditor } from './components/essay/EssayEditor';
 import { MATH_TOPICS } from './data/mathContent';
 import { CHINESE_TOPICS } from './data/chineseContent';
+import { PHYSICS_TOPICS } from './data/physicsContent';
 import { Menu, GraduationCap, X, Sparkles, Star, Zap, TrendingUp, ChevronLeft, ChevronRight, PenTool } from 'lucide-react';
 import { Topic, SubTopic, SubjectType, AIConfig, AIProvider } from './types';
 
@@ -130,6 +131,7 @@ const App: React.FC = () => {
       switch(currentSubject) {
           case 'math': return MATH_TOPICS;
           case 'chinese': return CHINESE_TOPICS;
+          case 'physics': return PHYSICS_TOPICS;
           default: return EMPTY_TOPICS;
       }
   }, [currentSubject]);
