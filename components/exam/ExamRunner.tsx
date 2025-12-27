@@ -18,7 +18,7 @@ const BlockRenderer: React.FC<{ content: string; className?: string }> = ({ cont
 
 // Define explicit props and state interfaces for the error boundary
 interface VisualErrorBoundaryProps {
-    children: React.ReactNode;
+    children?: React.ReactNode;
 }
 
 interface VisualErrorBoundaryState {
@@ -27,10 +27,7 @@ interface VisualErrorBoundaryState {
 
 // Simple Error Boundary for Visual Components
 class VisualErrorBoundary extends React.Component<VisualErrorBoundaryProps, VisualErrorBoundaryState> {
-    constructor(props: VisualErrorBoundaryProps) {
-        super(props);
-        this.state = { hasError: false };
-    }
+    state: VisualErrorBoundaryState = { hasError: false };
 
     static getDerivedStateFromError(_: Error): VisualErrorBoundaryState {
         return { hasError: true };

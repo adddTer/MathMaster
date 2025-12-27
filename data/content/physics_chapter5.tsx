@@ -74,7 +74,7 @@ export const PhysicsChapter5Content = {
                     <div className="flex-1 bg-white p-4 rounded-lg shadow-sm border border-purple-100">
                         <div className="font-bold text-slate-700 mb-2 border-b border-slate-100 pb-1 text-sm">最短位移</div>
                         <div className="text-xs text-slate-600 space-y-1">
-                            <div><span className="font-bold text-indigo-600">v船 > v水：</span> 船头偏向上游，合速度垂直河岸。位移 <MathFormula tex="x = d" />。</div>
+                            <div><span className="font-bold text-indigo-600">v船 &gt; v水：</span> 船头偏向上游，合速度垂直河岸。位移 <MathFormula tex="x = d" />。</div>
                             <div><span className="font-bold text-red-600">v船 &lt; v水：</span> 无法垂直渡河。合速度与船速垂直时位移最短。</div>
                         </div>
                     </div>
