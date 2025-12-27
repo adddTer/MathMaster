@@ -2,7 +2,8 @@
 import { ExamConfig, QuestionBlueprint, ExamQuestion, EssayConfig } from '../types';
 
 // --- MAIN TUTOR SYSTEM PROMPT (For Chat) ---
-export const SYSTEM_PROMPT = (context: string) => `
+// MUST be a function accepting context to avoid ReferenceError at module load time
+export const SYSTEM_PROMPT = (context: string): string => `
 你是一位亲切、耐心且专业的高中辅导老师（覆盖数学与语文）。
 你现在的教学重点是：${context}。
 
@@ -90,18 +91,32 @@ export const SYSTEM_PROMPT = (context: string) => `
 :::solid_geometry
 {
   "type": "cube", 
-  "label": "立方体"
+  "label": "立方体",
+  "initialRotation": { "x": 0.5, "y": 0.5 },
+  "allowInteraction": true
 }
 :::
 (type可选: cube, tetrahedron, prism, pyramid, cylinder_wire)
 
-9) **复平面 (Complex Plane)** - 用于复数几何意义
-:::complex_plane
+9) **平面几何与复平面 (Planar Geometry)** - 用于几何、受力分析、复数
+:::planar_geometry
 {
-  "points": [{ "x": 3, "y": 4, "label": "3+4i", "showVector": true }],
-  "range": 5
+  "items": [
+    { "type": "point", "x": 1, "y": 2, "label": "P", "color": "red" },
+    { "type": "line", "start": { "x": 0, "y": 0 }, "end": { "x": 3, "y": 0 }, "label": "L" },
+    { "type": "vector", "start": { "x": 0, "y": 0 }, "end": { "x": 1, "y": 2 }, "label": "v" },
+    { "type": "circle", "center": { "x": 0, "y": 0 }, "radius": 1, "label": "C", "dashed": true },
+    { "type": "polygon", "points": [{"x":0,"y":0}, {"x":2,"y":0}, {"x":1,"y":1.73}], "fill": "#10b981", "label": "Tri" }
+  ],
+  "width": 300,
+  "height": 300,
+  "xDomain": [-5, 5],
+  "yDomain": [-5, 5],
+  "showAxes": true, 
+  "axisLabels": ["x", "y"] // 复数时使用 ["Re", "Im"]
 }
 :::
+**注意：** 如果不需要显示坐标系（如纯几何图形），请设置 "showAxes": false，组件会自动居中显示图形。
 
 10) **易错点纠正 (Correction)** - 用于纠正典型错误
 :::correction
@@ -216,7 +231,8 @@ Your ONLY purpose is to take a malformed JSON string and output a syntactically 
 Do not add any explanations. Do not change the data values if possible, only fix the structure (quotes, commas, brackets) and ESCAPE BACKSLASHES (e.g. change "\\alpha" to "\\\\alpha").
 `;
 
-export const STRICT_GRADER_SYS_PROMPT = (context: string) => `
+// MUST be a function accepting context
+export const STRICT_GRADER_SYS_PROMPT = (context: string): string => `
 You are a strict grading assistant for ${context}.
 Output strictly in JSON format: { "status": "correct" | "partial" | "wrong", "feedback": "string" }.
 Evaluate the student's answer against the standard physics/math/logic rules.
@@ -236,7 +252,7 @@ Rules:
 5. NO Markdown. NO explanations outside JSON.
 `;
 
-export const BLUEPRINT_PROMPT = (config: ExamConfig) => `
+export const BLUEPRINT_PROMPT = (config: ExamConfig): string => `
 Create a valid JSON array of question blueprints for an exam.
 Topic: ${config.topic}
 Title: ${config.title}
@@ -271,7 +287,7 @@ Difficulty: ${config.difficultyDistribution}
 - **JSON SAFETY**: Ensure the JSON is valid. Do not produce an unterminated array.
 `;
 
-export const GENERATOR_PROMPT = (blueprint: QuestionBlueprint) => `
+export const GENERATOR_PROMPT = (blueprint: QuestionBlueprint): string => `
 Generate a single exam question based on this blueprint:
 ${JSON.stringify(blueprint)}
 
@@ -283,7 +299,14 @@ ${blueprint.preSetAnswer ? `**CONSTRAINT: The correct answer MUST be "${blueprin
   "options": ["A. 1", "B. 2", "C. 4", "D. 8"],
   "correctAnswer": "${blueprint.preSetAnswer || 'C'}",
   "analysis": "将 x=2 代入解析式计算...",
-  "gradingCriteria": "答案完全匹配得满分"
+  "gradingCriteria": "答案完全匹配得满分",
+  "visual": {
+      "type": "planar", 
+      "data": {
+          "items": [{"type": "triangle", "points": [...] }], 
+          "showAxes": false
+      }
+  }
 }
 
 **CRITICAL RULES**:
@@ -294,9 +317,13 @@ ${blueprint.preSetAnswer ? `**CONSTRAINT: The correct answer MUST be "${blueprin
 5. "gradingCriteria": String. In Chinese.
 6. **MATH LATEX**: Use single dollar signs $...$ for inline math.
 7. **JSON ESCAPING**: You MUST escape all backslashes in JSON strings. Use double backslashes for LaTeX commands (e.g. "\\\\alpha", "\\\\frac").
+8. **VISUAL COMPONENTS**: You can optionally include a 'visual' field for geometry/graphs.
+   - For 2D: "visual": { "type": "planar", "data": { "items": [...], "showAxes": false } }
+     (Set "showAxes": false for pure geometry shapes like triangles/circles to auto-center them).
+   - For 3D: "visual": { "type": "solid", "data": { "type": "cube", "initialRotation": {"x": 0.5, "y": 0.5}, "allowInteraction": true } }
 `;
 
-export const GRADER_PROMPT = (question: ExamQuestion, userAnswer: any) => `
+export const GRADER_PROMPT = (question: ExamQuestion, userAnswer: any): string => `
 Task: Grade this exam question.
 Max Score: ${question.score}
 
@@ -310,7 +337,7 @@ Provide a score (0 to ${question.score}) and feedback (in Simplified Chinese, un
 `;
 
 // --- EXAM REPORT PROMPT ---
-export const EXAM_REPORT_PROMPT = (summary: string) => `
+export const EXAM_REPORT_PROMPT = (summary: string): string => `
 You are a senior academic tutor.
 Based on the following exam results, generate a "Comprehensive Learning Evaluation Report" for the student.
 
@@ -332,7 +359,7 @@ ${summary}
 
 // --- ESSAY SERVICE PROMPTS ---
 
-export const ESSAY_BRAINSTORM_PROMPT = (topic: string, requirements: string = "") => `
+export const ESSAY_BRAINSTORM_PROMPT = (topic: string, requirements: string = ""): string => `
 You are a creative writing coach. 
 Topic: "${topic}"
 Requirements: "${requirements}"
@@ -346,7 +373,7 @@ Example:
 ]
 `;
 
-export const ESSAY_OUTLINE_PROMPT = (config: EssayConfig) => `
+export const ESSAY_OUTLINE_PROMPT = (config: EssayConfig): string => `
 You are an essay architect.
 Topic: "${config.topic}"
 Selected Angle: "${config.selectedAngle}"
@@ -356,7 +383,7 @@ Output Format: JSON Array of strings (each string is a paragraph summary).
 Example: ["Para 1: Intro...", "Para 2: ..."]
 `;
 
-export const ESSAY_MATERIALS_PROMPT = (config: EssayConfig) => `
+export const ESSAY_MATERIALS_PROMPT = (config: EssayConfig): string => `
 You are a research assistant.
 Topic: "${config.topic}"
 Angle: "${config.selectedAngle}"
@@ -366,7 +393,7 @@ Task: Provide 5-8 relevant quotes, historical examples, or data points to suppor
 Output Format: JSON Array of strings.
 `;
 
-export const ESSAY_ADVISOR_PROMPT = (config: EssayConfig, currentText: string) => `
+export const ESSAY_ADVISOR_PROMPT = (config: EssayConfig, currentText: string): string => `
 You are a panel of writing advisors (Logic, Rhetoric, History, Reality).
 Topic: "${config.topic}"
 Current Text: "${currentText.slice(-500)}"
@@ -381,7 +408,7 @@ Output Format: JSON Array.
 ]
 `;
 
-export const ESSAY_SUGGESTION_PROMPT = (config: EssayConfig, currentText: string, advisorsJSON: string) => `
+export const ESSAY_SUGGESTION_PROMPT = (config: EssayConfig, currentText: string, advisorsJSON: string): string => `
 You are the Editor-in-Chief.
 Topic: "${config.topic}"
 Advisors' Opinions: ${advisorsJSON}
@@ -402,7 +429,7 @@ Follow the user's instructions and context strictly.
 
 // --- ESSAY AGENT PROMPTS (Chat Mode - Strictly Separated) ---
 
-// 顾问角色定义 (Removed Emojis for professional tone)
+// 顾问角色定义
 const ADVISOR_PERSONAS = {
     logic: "你叫逻辑架构师。你冷静、严谨，痴迷于文章的结构骨架和逻辑链条。你喜欢用“起承转合”、“层层递进”等术语。你的目标是确保文章无懈可击。",
     rhetoric: "你叫文学修辞家。你感性、浪漫，注重语言的感染力和文采。你喜欢引用诗词，关注修辞手法。你的目标是让文章读起来唇齿留香。",
@@ -440,10 +467,11 @@ Admin 的任务是最终确定 3 组素材方案。`,
 
 export const AGENT_PROMPTS = {
     // Admin (管理AI)
-    admin: (topic: string, phase: string, isProxyMode: boolean) => `
+    admin: (topic: string, phase: string, isProxyMode: boolean): string => `
 你叫“管理AI”。你是这场作文编委会的主持人、主编。
 材料/题目：${topic}
 当前阶段：${PHASE_INSTRUCTIONS[phase as keyof typeof PHASE_INSTRUCTIONS] || phase}
+当前模式：${isProxyMode ? '用户代理模式' : '全托管模式'}
 
 **你的特殊职责**：
 1. **控场**：引导其他 4 位顾问（逻辑、修辞、历史、现实）发言。
@@ -472,26 +500,26 @@ export const AGENT_PROMPTS = {
 `,
 
     // Advisors
-    logic: (topic: string, phase: string) => `
+    logic: (topic: string, phase: string): string => `
 ${ADVISOR_PERSONAS.logic}
 材料/题目：${topic}
 ${PHASE_INSTRUCTIONS[phase as keyof typeof PHASE_INSTRUCTIONS] || phase}
 ${BASE_INSTRUCTION}
 特别注意：如果是大纲阶段，坚持要求 6-8 段的结构，反对少于 6 段的简单结构。
 `,
-    rhetoric: (topic: string, phase: string) => `
+    rhetoric: (topic: string, phase: string): string => `
 ${ADVISOR_PERSONAS.rhetoric}
 材料/题目：${topic}
 ${PHASE_INSTRUCTIONS[phase as keyof typeof PHASE_INSTRUCTIONS] || phase}
 ${BASE_INSTRUCTION}
 `,
-    history: (topic: string, phase: string) => `
+    history: (topic: string, phase: string): string => `
 ${ADVISOR_PERSONAS.history}
 材料/题目：${topic}
 ${PHASE_INSTRUCTIONS[phase as keyof typeof PHASE_INSTRUCTIONS] || phase}
 ${BASE_INSTRUCTION}
 `,
-    reality: (topic: string, phase: string) => `
+    reality: (topic: string, phase: string): string => `
 ${ADVISOR_PERSONAS.reality}
 材料/题目：${topic}
 ${PHASE_INSTRUCTIONS[phase as keyof typeof PHASE_INSTRUCTIONS] || phase}

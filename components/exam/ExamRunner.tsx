@@ -5,15 +5,46 @@ import { gradeExamQuestion, generateExamReport } from '../../services/examServic
 import { Loader2, CheckCircle2, X, BrainCircuit, CheckSquare, Square, PenTool, ChevronLeft, ChevronRight, BarChart2, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, LayoutGrid } from 'lucide-react';
 import { InlineParser, StandardTextBlock } from '../blocks/utils';
 import { ExamReportModal } from './ExamReportModal';
+import { PlanarGeometry } from '../PlanarGeometry';
+import { SolidGeometry } from '../SolidGeometry';
 
-// Renderer for Block Content (Question text, Analysis, Feedback) - Supports Markdown headers, lists, etc.
+// Renderer for Block Content (Question text, Analysis, Feedback) 
+// Updated to use whitespace-pre-line to respect double newlines but allow wrapping
 const BlockRenderer: React.FC<{ content: string; className?: string }> = ({ content, className = '' }) => (
-    <div className={`text-slate-800 ${className}`}>
-        <StandardTextBlock content={content} />
+    <div className={`whitespace-pre-line leading-relaxed break-words ${className}`}>
+        <InlineParser content={content} />
     </div>
 );
 
-// Renderer for Inline Content (Options) - Supports Math and Bold, but keeps layout inline-ish
+// Define explicit props and state interfaces for the error boundary
+interface VisualErrorBoundaryProps {
+    children: React.ReactNode;
+}
+
+interface VisualErrorBoundaryState {
+    hasError: boolean;
+}
+
+// Simple Error Boundary for Visual Components
+class VisualErrorBoundary extends React.Component<VisualErrorBoundaryProps, VisualErrorBoundaryState> {
+    constructor(props: VisualErrorBoundaryProps) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError(_: Error): VisualErrorBoundaryState {
+        return { hasError: true };
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return <div className="p-4 bg-red-50 text-red-500 text-xs rounded border border-red-200 text-center">图示加载失败</div>;
+        }
+        return this.props.children;
+    }
+}
+
+// Renderer for Inline Content (Options)
 const InlineRenderer: React.FC<{ content: string; className?: string }> = ({ content, className = '' }) => (
     <span className={`leading-relaxed ${className}`}>
         <InlineParser content={content} />
@@ -492,8 +523,25 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                                 </div>
                                 <div className="text-slate-400 text-sm font-mono">{currentIndex + 1} / {exam.questions.length}</div>
                             </div>
+                            
                             <BlockRenderer content={currentQuestion.content} className="text-lg font-medium" />
+                            
+                            {/* VISUAL COMPONENT RENDERING */}
+                            {currentQuestion.visual && (
+                                <div className="my-6 flex justify-center w-full">
+                                    <VisualErrorBoundary>
+                                        {currentQuestion.visual.type === 'planar' && (
+                                            <PlanarGeometry {...currentQuestion.visual.data} />
+                                        )}
+                                        {currentQuestion.visual.type === 'solid' && (
+                                            <SolidGeometry {...currentQuestion.visual.data} />
+                                        )}
+                                    </VisualErrorBoundary>
+                                </div>
+                            )}
+
                             {renderInput()}
+                            
                             {!currentQuestion.isGraded && currentQuestion.userAnswer && !currentQuestion.gradingError && (
                                 <div className="mt-4 flex justify-end">
                                     <button onClick={() => handleGradeSingle(currentIndex)} disabled={gradingLoading[currentQuestion.id]} className="flex items-center gap-2 text-indigo-600 text-sm font-medium px-3 py-1.5 hover:bg-indigo-50 rounded-lg">

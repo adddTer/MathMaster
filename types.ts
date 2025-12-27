@@ -83,6 +83,12 @@ export interface ExamQuestion {
   gradingCriteria: string; // Instructions for the AI grader
   analysis?: string; // Explanation
 
+  // Visual Component Data
+  visual?: {
+      type: 'planar' | 'solid';
+      data: any; // Props for PlanarGeometry or SolidGeometry
+  };
+
   // User Interaction Data
   userAnswer?: string | boolean | string[];
   isGraded: boolean;

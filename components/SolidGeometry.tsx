@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Rotate3d, Move, Maximize2 } from 'lucide-react';
 
@@ -86,10 +87,10 @@ const SHAPES: Record<string, SolidShape> = {
       edges: [
           // Top Loop
           {start:0, end:1}, {start:1, end:2}, {start:2, end:3}, {start:3, end:4}, {start:4, end:5}, {start:5, end:6}, {start:6, end:7}, {start:7, end:0},
-          // Bottom Loop
-          {start:8, end:9}, {start:9, end:10}, {start:10, end:11}, {start:11, end:12}, {start:12, end:13}, {start:13, end:14}, {start:14, end:15}, {start:15, end:8, dashed:true},
-          // Sides (Generatrices) - simplified
-          {start:0, end:8}, {start:4, end:12}
+          // Bottom Loop - removed dashed: true from last segment for cleaner wireframe
+          {start:8, end:9}, {start:9, end:10}, {start:10, end:11}, {start:11, end:12}, {start:12, end:13}, {start:13, end:14}, {start:14, end:15}, {start:15, end:8},
+          // Sides (Generatrices)
+          {start:0, end:8}, {start:4, end:12}, {start:2, end:10}, {start:6, end:14}
       ]
   }
 };
@@ -166,6 +167,8 @@ export const SolidGeometry: React.FC<SolidGeometryProps> = ({
       setIsDragging(false);
   };
 
+  if (!shape || !shape.vertices) return null;
+
   // Render
   const projectedVertices = shape.vertices.map(v => project(v, rotation.x, rotation.y));
 
@@ -193,12 +196,14 @@ export const SolidGeometry: React.FC<SolidGeometryProps> = ({
                     const start = projectedVertices[edge.start];
                     const end = projectedVertices[edge.end];
                     
+                    if (!start || !end) return null;
+
                     return (
                         <line 
                             key={i}
                             x1={start.x} y1={start.y}
                             x2={end.x} y2={end.y}
-                            stroke={edge.dashed ? "#cbd5e1" : "#3b82f6"} // slate-300 or blue-500
+                            stroke={edge.dashed ? "#94a3b8" : "#3b82f6"} // slate-400 or blue-500
                             strokeWidth={edge.dashed ? 1.5 : 2}
                             strokeDasharray={edge.dashed ? "4 4" : "none"}
                             strokeLinecap="round"

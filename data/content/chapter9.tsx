@@ -1,6 +1,8 @@
+
 import React from 'react';
 import { MathFormula } from '../../components/MathFormula';
-import { Move, ArrowUpRight, Maximize, Minimize, Compass, Anchor, Scale, Grid, ArrowDownRight } from 'lucide-react';
+import { PlanarGeometry } from '../../components/PlanarGeometry';
+import { Move, ArrowUpRight, Maximize, Scale, Grid, ArrowDownRight, Anchor } from 'lucide-react';
 
 const FormulaCard = ({ children, className = '' }: { children?: React.ReactNode; className?: string }) => (
   <div className={`bg-white border-l-4 border-primary-500 shadow-sm border-y border-r border-slate-200 rounded-r-xl p-5 text-center my-4 ${className}`}>
@@ -34,25 +36,17 @@ export const Chapter9Content = {
             <div className="grid md:grid-cols-2 gap-4">
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                     <span className="font-bold text-slate-700 mb-2 block">几何表示</span>
-                    <div className="bg-white rounded border border-slate-200 mb-2 overflow-hidden relative" style={{ height: '120px' }}>
-                        {/* Grid Background */}
-                        <div className="absolute inset-0 opacity-10" style={{
-                            backgroundImage: 'linear-gradient(#64748b 1px, transparent 1px), linear-gradient(90deg, #64748b 1px, transparent 1px)',
-                            backgroundSize: '20px 20px'
-                        }}></div>
-                        
-                        <svg viewBox="0 0 200 100" className="w-full h-full absolute inset-0">
-                            <defs>
-                                <marker id="arrow-v1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-                                    <path d="M0,0 L0,6 L9,3 z" fill="#3b82f6" />
-                                </marker>
-                            </defs>
-                            {/* Vector AB */}
-                            <circle cx="40" cy="70" r="3" fill="#3b82f6" />
-                            <line x1="40" y1="70" x2="150" y2="30" stroke="#3b82f6" strokeWidth="2.5" markerEnd="url(#arrow-v1)" />
-                            <text x="30" y="85" fontSize="12" fill="#64748b" fontWeight="bold">A (起点)</text>
-                            <text x="155" y="25" fontSize="12" fill="#64748b" fontWeight="bold">B (终点)</text>
-                        </svg>
+                    <div className="bg-white rounded border border-slate-200 mb-2 overflow-hidden relative flex justify-center">
+                        <PlanarGeometry 
+                            width={200} height={120}
+                            xDomain={[-1, 5]} yDomain={[-1, 3]}
+                            showGrid={false} showAxes={false}
+                            items={[
+                                { type: 'point', x:0, y:0, label: 'A', color: '#64748b' },
+                                { type: 'point', x:4, y:2, label: 'B', color: '#64748b' },
+                                { type: 'vector', start: {x:0,y:0}, end: {x:4,y:2}, color: '#3b82f6' }
+                            ]}
+                        />
                     </div>
                     <div className="text-xs text-slate-500 text-center">有向线段 <MathFormula tex="\overrightarrow{AB}" /></div>
                 </div>
@@ -106,59 +100,39 @@ export const Chapter9Content = {
             <div className="grid md:grid-cols-2 gap-6">
                 <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
                     <span className="font-bold text-emerald-800 block mb-2">三角形法则</span>
-                    <div className="h-40 bg-white rounded-lg border border-emerald-50 flex items-center justify-center relative overflow-hidden">
-                        <svg viewBox="0 0 200 120" className="w-full h-full">
-                            <defs>
-                                <marker id="arrow-a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-                                    <path d="M0,0 L0,6 L9,3 z" fill="#94a3b8" />
-                                </marker>
-                                <marker id="arrow-res" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-                                    <path d="M0,0 L0,6 L9,3 z" fill="#10b981" />
-                                </marker>
-                            </defs>
-                            {/* Vector a */}
-                            <line x1="40" y1="90" x2="100" y2="90" stroke="#94a3b8" strokeWidth="2" markerEnd="url(#arrow-a)" />
-                            <text x="70" y="105" fontSize="12" fill="#94a3b8">a</text>
-                            {/* Vector b */}
-                            <line x1="100" y1="90" x2="150" y2="40" stroke="#94a3b8" strokeWidth="2" markerEnd="url(#arrow-a)" />
-                            <text x="130" y="70" fontSize="12" fill="#94a3b8">b</text>
-                            {/* Resultant */}
-                            <line x1="40" y1="90" x2="150" y2="40" stroke="#10b981" strokeWidth="3" markerEnd="url(#arrow-res)" strokeDasharray="5 2"/>
-                            <text x="85" y="55" fontSize="14" fill="#10b981" fontWeight="bold">a+b</text>
-                            
-                            <circle cx="40" cy="90" r="2" fill="#64748b" />
-                            <circle cx="100" cy="90" r="2" fill="#64748b" />
-                            <circle cx="150" cy="40" r="2" fill="#10b981" />
-                        </svg>
+                    <div className="bg-white rounded-lg border border-emerald-50 flex items-center justify-center relative overflow-hidden">
+                        <PlanarGeometry 
+                            width={240} height={160}
+                            xDomain={[-1, 4]} yDomain={[-1, 2.5]}
+                            showGrid={false} showAxes={false}
+                            items={[
+                                { type: 'vector', start: {x:0, y:0}, end: {x:1.5, y:0}, color: '#94a3b8', label: 'a' },
+                                { type: 'vector', start: {x:1.5, y:0}, end: {x:2.5, y:1.5}, color: '#94a3b8', label: 'b' },
+                                { type: 'vector', start: {x:0, y:0}, end: {x:2.5, y:1.5}, color: '#10b981', label: 'a+b', dashed: true },
+                                { type: 'point', x:0, y:0, color: '#64748b' },
+                                { type: 'point', x:1.5, y:0, color: '#64748b' },
+                                { type: 'point', x:2.5, y:1.5, color: '#10b981' }
+                            ]}
+                        />
                     </div>
                     <div className="text-xs text-emerald-700 mt-2 font-bold">首尾相接，指终点</div>
                 </div>
                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center">
                     <span className="font-bold text-blue-800 block mb-2">平行四边形法则</span>
-                    <div className="h-40 bg-white rounded-lg border border-blue-50 flex items-center justify-center relative overflow-hidden">
-                        <svg viewBox="0 0 200 120" className="w-full h-full">
-                            <defs>
-                                <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-                                    <path d="M0,0 L0,6 L9,3 z" fill="#3b82f6" />
-                                </marker>
-                            </defs>
-                            {/* Vector a */}
-                            <line x1="40" y1="90" x2="100" y2="90" stroke="#94a3b8" strokeWidth="2" markerEnd="url(#arrow-a)" />
-                            <text x="70" y="105" fontSize="12" fill="#94a3b8">a</text>
-                            {/* Vector b (origin) */}
-                            <line x1="40" y1="90" x2="90" y2="40" stroke="#94a3b8" strokeWidth="2" markerEnd="url(#arrow-a)" />
-                            <text x="55" y="60" fontSize="12" fill="#94a3b8">b</text>
-                            
-                            {/* Dashed lines */}
-                            <line x1="90" y1="40" x2="150" y2="40" stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="4 2" />
-                            <line x1="100" y1="90" x2="150" y2="40" stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="4 2" />
-                            
-                            {/* Resultant */}
-                            <line x1="40" y1="90" x2="150" y2="40" stroke="#3b82f6" strokeWidth="3" markerEnd="url(#arrow-blue)" />
-                            <text x="100" y="55" fontSize="14" fill="#3b82f6" fontWeight="bold">a+b</text>
-                            
-                            <circle cx="40" cy="90" r="2.5" fill="#3b82f6" />
-                        </svg>
+                    <div className="bg-white rounded-lg border border-blue-50 flex items-center justify-center relative overflow-hidden">
+                        <PlanarGeometry 
+                            width={240} height={160}
+                            xDomain={[-1, 4]} yDomain={[-1, 2.5]}
+                            showGrid={false} showAxes={false}
+                            items={[
+                                { type: 'vector', start: {x:0, y:0}, end: {x:1.5, y:0}, color: '#94a3b8', label: 'a' },
+                                { type: 'vector', start: {x:0, y:0}, end: {x:1, y:1.5}, color: '#94a3b8', label: 'b' },
+                                { type: 'line', start: {x:1, y:1.5}, end: {x:2.5, y:1.5}, color: '#cbd5e1', dashed: true },
+                                { type: 'line', start: {x:1.5, y:0}, end: {x:2.5, y:1.5}, color: '#cbd5e1', dashed: true },
+                                { type: 'vector', start: {x:0, y:0}, end: {x:2.5, y:1.5}, color: '#3b82f6', label: 'a+b' },
+                                { type: 'point', x:0, y:0, color: '#3b82f6' }
+                            ]}
+                        />
                     </div>
                     <div className="text-xs text-blue-700 mt-2 font-bold">共起点，对角线</div>
                 </div>
@@ -180,29 +154,18 @@ export const Chapter9Content = {
                             <br/><MathFormula tex="\overrightarrow{OA} - \overrightarrow{OB} = \overrightarrow{BA}" />
                         </div>
                     </div>
-                    <div className="w-full md:w-48 h-32 bg-white border border-slate-200 rounded flex items-center justify-center relative overflow-hidden">
-                         <svg viewBox="0 0 200 120" className="w-full h-full">
-                            <defs>
-                                <marker id="arrow-red" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-                                    <path d="M0,0 L0,6 L9,3 z" fill="#ef4444" />
-                                </marker>
-                            </defs>
-                            {/* Origin O */}
-                            <circle cx="100" cy="100" r="2.5" fill="#64748b" />
-                            <text x="95" y="115" fontSize="12" fill="#64748b">O</text>
-                            
-                            {/* Vector a (OA) */}
-                            <line x1="100" y1="100" x2="160" y2="40" stroke="#94a3b8" strokeWidth="2" markerEnd="url(#arrow-a)" />
-                            <text x="140" y="70" fontSize="12" fill="#94a3b8">a</text>
-                            
-                            {/* Vector b (OB) */}
-                            <line x1="100" y1="100" x2="40" y2="60" stroke="#94a3b8" strokeWidth="2" markerEnd="url(#arrow-a)" />
-                            <text x="60" y="90" fontSize="12" fill="#94a3b8">b</text>
-                            
-                            {/* Resultant a-b (BA) */}
-                            <line x1="40" y1="60" x2="160" y2="40" stroke="#ef4444" strokeWidth="3" markerEnd="url(#arrow-red)" strokeDasharray="5 2"/>
-                            <text x="90" y="45" fontSize="14" fill="#ef4444" fontWeight="bold">a - b</text>
-                        </svg>
+                    <div className="w-full md:w-64 bg-white border border-slate-200 rounded flex items-center justify-center relative overflow-hidden">
+                         <PlanarGeometry 
+                            width={240} height={160}
+                            xDomain={[-1, 4]} yDomain={[-1, 3]}
+                            showGrid={false} showAxes={false}
+                            items={[
+                                { type: 'point', x:0, y:0, label: 'O', color: '#64748b' },
+                                { type: 'vector', start: {x:0, y:0}, end: {x:3, y:1}, color: '#94a3b8', label: 'a' }, // OA
+                                { type: 'vector', start: {x:0, y:0}, end: {x:1, y:2.5}, color: '#94a3b8', label: 'b' }, // OB
+                                { type: 'vector', start: {x:1, y:2.5}, end: {x:3, y:1}, color: '#ef4444', label: 'a-b', dashed: true }, // BA
+                            ]}
+                        />
                     </div>
                 </div>
 
@@ -360,14 +323,28 @@ export const Chapter9Content = {
 
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <h5 className="font-bold text-slate-700 mb-2">2. 物理应用：力的合成与分解</h5>
-                    <div className="flex gap-4 items-center">
+                    <div className="flex gap-4 items-center flex-col md:flex-row">
                         <div className="flex-1 text-sm text-slate-600">
                             力是典型的向量（有大小、方向）。合力遵循向量加法的<span className="font-bold">平行四边形法则</span>。
                             <br/>
                             <MathFormula tex="\boldsymbol{F} = \boldsymbol{F}_1 + \boldsymbol{F}_2" />
                         </div>
-                        <div className="w-24 h-24 bg-white rounded border border-slate-200 flex items-center justify-center">
-                            <Anchor className="w-10 h-10 text-slate-300" />
+                        <div className="w-full md:w-64 bg-white border border-slate-200 rounded flex items-center justify-center relative overflow-hidden">
+                            <PlanarGeometry 
+                                width={200}
+                                height={120}
+                                xDomain={[-1, 4]}
+                                yDomain={[-1, 3]}
+                                showGrid={false}
+                                showAxes={false}
+                                items={[
+                                    { type: 'vector', start: {x:0, y:0}, end: {x:3, y:0}, color: '#64748b', label: 'F_1' },
+                                    { type: 'vector', start: {x:0, y:0}, end: {x:0, y:2}, color: '#64748b', label: 'F_2' },
+                                    { type: 'line', start: {x:3, y:0}, end: {x:3, y:2}, color: '#cbd5e1', dashed: true },
+                                    { type: 'line', start: {x:0, y:2}, end: {x:3, y:2}, color: '#cbd5e1', dashed: true },
+                                    { type: 'vector', start: {x:0, y:0}, end: {x:3, y:2}, color: '#4f46e5', label: 'F' }
+                                ]}
+                            />
                         </div>
                     </div>
                 </div>

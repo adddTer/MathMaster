@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { MathFormula } from '../../components/MathFormula';
-import { ComplexPlane } from '../../components/ComplexPlane';
+import { PlanarGeometry } from '../../components/PlanarGeometry';
 import { Fingerprint, Calculator, Map, RotateCw, Search, BookOpen } from 'lucide-react';
 
 const FormulaCard = ({ children, className = '' }: { children?: React.ReactNode; className?: string }) => (
@@ -125,11 +126,19 @@ export const Chapter12Content = {
             </h4>
             <div className="flex flex-col md:flex-row gap-6 items-center">
                 <div className="shrink-0">
-                    <ComplexPlane 
-                        points={[{ x: 3, y: 4, label: "Z(a,b)", showVector: true, showComponents: true, color: "#3b82f6" }]} 
-                        range={5}
-                        size={220}
-                        label="复数 z = a + bi 的几何表示"
+                    <PlanarGeometry 
+                        items={[
+                            { type: 'vector', start: {x:0,y:0}, end: {x:3,y:4}, color: '#3b82f6', label: 'z' },
+                            { type: 'point', x:3, y:4, label: 'Z(a,b)', color: '#3b82f6' },
+                            { type: 'line', start: {x:3, y:4}, end: {x:3, y:0}, dashed: true, color: '#94a3b8' },
+                            { type: 'line', start: {x:3, y:4}, end: {x:0, y:4}, dashed: true, color: '#94a3b8' }
+                        ]}
+                        xDomain={[-1, 5]}
+                        yDomain={[-1, 5]}
+                        width={240}
+                        height={240}
+                        axisLabels={['Re', 'Im']}
+                        title="复数 z=a+bi 的几何意义"
                     />
                 </div>
                 <div className="flex-1 space-y-3">
@@ -172,12 +181,18 @@ export const Chapter12Content = {
             </h4>
             <div className="flex flex-col md:flex-row gap-6 items-center">
                 <div className="shrink-0">
-                    <ComplexPlane 
-                        points={[{ x: 3, y: 3, label: "Z", showVector: true, showAngle: true, color: "#8b5cf6" }]} 
-                        range={4}
-                        size={220}
-                        showUnitCircle={true}
-                        label="模 r 与 辐角 θ"
+                    <PlanarGeometry 
+                        items={[
+                            { type: 'circle', center: {x:0, y:0}, radius: 3, dashed: true, color: '#e2e8f0' },
+                            { type: 'vector', start: {x:0,y:0}, end: {x:2.12,y:2.12}, color: '#8b5cf6', label: 'z' },
+                            { type: 'point', x:2.12, y:2.12, label: 'Z', color: '#8b5cf6' }
+                        ]}
+                        xDomain={[-4, 4]}
+                        yDomain={[-4, 4]}
+                        width={240}
+                        height={240}
+                        axisLabels={['Re', 'Im']}
+                        title="模 r 与 辐角 θ"
                     />
                 </div>
                 <div className="flex-1">
@@ -226,16 +241,22 @@ export const Chapter12Content = {
             
             <div className="grid md:grid-cols-2 gap-6 items-center">
                 <div className="flex justify-center">
-                    <ComplexPlane 
-                        points={[
-                            { x: 1, y: 0, label: "1", color: "#ef4444" },
-                            { x: -0.5, y: 0.866, label: "\\omega", color: "#ef4444" },
-                            { x: -0.5, y: -0.866, label: "\\omega^2", color: "#ef4444" }
-                        ]} 
-                        range={1.5}
-                        size={200}
-                        showUnitCircle={true}
-                        label="三次单位根构成正三角形"
+                    <PlanarGeometry 
+                        items={[
+                            { type: 'circle', center: {x:0, y:0}, radius: 2, dashed: true, color: '#94a3b8' },
+                            { type: 'point', x:2, y:0, label: '1', color: '#ef4444' },
+                            { type: 'point', x:-1, y:1.732, label: '\\omega', color: '#ef4444' },
+                            { type: 'point', x:-1, y:-1.732, label: '\\omega^2', color: '#ef4444' },
+                            { type: 'line', start: {x:2, y:0}, end: {x:-1, y:1.732}, color: '#fca5a5' },
+                            { type: 'line', start: {x:-1, y:1.732}, end: {x:-1, y:-1.732}, color: '#fca5a5' },
+                            { type: 'line', start: {x:-1, y:-1.732}, end: {x:2, y:0}, color: '#fca5a5' },
+                        ]}
+                        xDomain={[-2.5, 2.5]}
+                        yDomain={[-2.5, 2.5]}
+                        width={220}
+                        height={220}
+                        axisLabels={['Re', 'Im']}
+                        title="三次单位根构成正三角形"
                     />
                 </div>
                 

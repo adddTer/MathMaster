@@ -3,7 +3,7 @@ import React from 'react';
 import { blockRegex, StandardTextBlock } from './blocks/utils';
 import { ChoiceBlock, MultipleChoiceBlock, FillInBlock, TrueFalseBlock, QuizBlock } from './blocks/QuestionBlocks';
 import { KeypointBlock, StepSolverBlock, ComparisonBlock, CorrectionBlock, ChecklistBlock, TipsBlock, SuggestionsBlock } from './blocks/ContentBlocks';
-import { PlotBlock, ChartBlock, ComplexBlock, GeometryBlock } from './blocks/VisualBlocks';
+import { PlotBlock, ChartBlock, ComplexBlock, PlanarBlock, GeometryBlock } from './blocks/VisualBlocks';
 import { ExamConfigBlock, EssayGeneratorBlock } from './blocks/ToolBlocks';
 import { EssayDecisionBlock } from './blocks/EssayBlocks';
 
@@ -44,6 +44,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({ content, onInt
         if (part.startsWith(':::plot')) return <PlotBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
         if (part.startsWith(':::chart')) return <ChartBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
         if (part.startsWith(':::complex_plane')) return <ComplexBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
+        if (part.startsWith(':::planar_geometry')) return <PlanarBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
         if (part.startsWith(':::solid_geometry')) return <GeometryBlock key={compKey} content={part} onInteract={interact} savedState={blockState} />;
         
         // Tool Blocks
