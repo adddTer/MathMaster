@@ -275,11 +275,13 @@ export const GENERATOR_PROMPT = (blueprint: QuestionBlueprint) => `
 Generate a single exam question based on this blueprint:
 ${JSON.stringify(blueprint)}
 
+${blueprint.preSetAnswer ? `**CONSTRAINT: The correct answer MUST be "${blueprint.preSetAnswer}". You must construct the question and options such that this is the result.**` : ''}
+
 **EXAMPLE OUTPUT** (Output strictly the object, no markdown):
 {
   "content": "已知 $f(x)=x^2$，求：\\n(1) $f(2)$；\\n(2) $f(-2)$。",
   "options": ["A. 1", "B. 2", "C. 4", "D. 8"],
-  "correctAnswer": "C",
+  "correctAnswer": "${blueprint.preSetAnswer || 'C'}",
   "analysis": "将 x=2 代入解析式计算...",
   "gradingCriteria": "答案完全匹配得满分"
 }
@@ -316,14 +318,14 @@ Based on the following exam results, generate a "Comprehensive Learning Evaluati
 ${summary}
 
 **Report Sections**:
-1.  **📊 成绩总评**: Comment on the score and overall performance.
-2.  **🧠 知识点掌握分析**: Based on the knowledge points of correct/wrong questions, analyze strengths and weaknesses.
-3.  **🎯 错题深度剖析**: For wrong questions, briefly explain the likely cognitive gap.
-4.  **🚀 后续学习建议**: Specific actionable advice.
+1.  **成绩总评**: Comment on the score and overall performance.
+2.  **知识点掌握分析**: Based on the knowledge points of correct/wrong questions, analyze strengths and weaknesses.
+3.  **错题深度剖析**: For wrong questions, briefly explain the likely cognitive gap.
+4.  **后续学习建议**: Specific actionable advice.
 
 **Requirements**:
-- Use Markdown formatting. 
-- Use bolding for key terms.
+- **DO NOT** use Markdown Headers (e.g. # Title, ## Section). Use **Bold** for section titles instead.
+- **DO NOT** use emojis. Keep it professional and academic.
 - Tone: Encouraging, professional, insightful.
 - Language: Simplified Chinese.
 `;

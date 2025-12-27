@@ -104,6 +104,15 @@ const callAIStream = async (config: AIConfig, prompt: string, sysPrompt: string,
     }
 }
 
+// Helper: Shuffle array
+function shuffleArray<T>(array: T[]): T[] {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
 // 1. Generate Exam Blueprint
 export const generateExamBlueprint = async (config: ExamConfig, aiConfig: AIConfig): Promise<QuestionBlueprint[]> => {
     try {
@@ -112,16 +121,41 @@ export const generateExamBlueprint = async (config: ExamConfig, aiConfig: AIConf
         const cleanJson = extractJsonFromText(responseText);
         const parsed = safeJsonParse(cleanJson);
         
+        let blueprints: QuestionBlueprint[] = [];
         if (!Array.isArray(parsed)) {
             const potentialArray = Object.values(parsed).find(val => Array.isArray(val));
-            if (potentialArray) return potentialArray as QuestionBlueprint[];
-            throw new Error("Returned JSON is not an array");
+            if (potentialArray) blueprints = potentialArray as QuestionBlueprint[];
+            else throw new Error("Returned JSON is not an array");
+        } else {
+            blueprints = parsed;
         }
 
-        return parsed.map((item: any, i: number) => ({
-            ...item,
-            index: item.index !== undefined ? item.index : i
-        }));
+        // Post-process: Pre-assign random answers to ensure diversity
+        const options = ['A', 'B', 'C', 'D'];
+        
+        return blueprints.map((item: any, i: number) => {
+            const newItem = {
+                ...item,
+                index: item.index !== undefined ? item.index : i
+            };
+
+            // Randomize Answer for Choice Questions to prevent AI bias
+            if (item.type === 'single_choice') {
+                const randIndex = Math.floor(Math.random() * 4);
+                newItem.preSetAnswer = options[randIndex];
+            } else if (item.type === 'multiple_choice') {
+                // Random subset of A,B,C,D (at least 2 items)
+                const shuffled = shuffleArray([...options]);
+                const count = Math.floor(Math.random() * 3) + 2; // 2, 3, or 4
+                const selected = shuffled.slice(0, count).sort(); // Sort alphabetically (e.g., A, C)
+                newItem.preSetAnswer = selected.join(''); // e.g., "AC" or "ACD"
+            } else if (item.type === 'true_false') {
+                // Not strictly necessary as "True/False" is simple, but good for balance
+                // newItem.preSetAnswer = Math.random() > 0.5 ? "True" : "False";
+            }
+
+            return newItem;
+        });
     } catch (e: any) {
         throw new Error("Blueprint generation failed: " + sanitizeError(e));
     }
@@ -170,11 +204,17 @@ export const gradeExamQuestion = async (question: ExamQuestion, userAnswer: any,
         const data = safeJsonParse(cleanJson);
         const finalData = data.result || data.grading || data;
 
+        // Validation: If score is missing or not a number, consider it a failure to prevent "0 score" bugs
+        if (typeof finalData.score !== 'number') {
+            throw new Error("AI response missing valid score");
+        }
+
         return {
-            score: typeof finalData.score === 'number' ? finalData.score : 0,
+            score: finalData.score,
             feedback: finalData.feedback || "批改完成"
         };
     } catch (e) {
+        // Fallback for simple types only (Local Grading)
         if (question.type === 'single_choice' || question.type === 'true_false') {
             const isCorrect = String(userAnswer).trim() === String(question.correctAnswer).trim();
             return {
@@ -182,7 +222,8 @@ export const gradeExamQuestion = async (question: ExamQuestion, userAnswer: any,
                 feedback: isCorrect ? "回答正确" : "回答错误"
             };
         }
-        return { score: 0, feedback: "AI 批改失败，请人工复核。" };
+        // For subjective questions, we MUST throw to trigger the UI error state (Retry button)
+        throw e;
     }
 };
 

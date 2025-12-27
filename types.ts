@@ -66,6 +66,7 @@ export interface QuestionBlueprint {
   knowledgePoint: string; // Specific sub-topic or concept to test
   score: number;
   designIntent: string; // Brief note on what this tests
+  preSetAnswer?: string; // Pre-assigned answer to force distribution (e.g. "C", "AB")
 }
 
 export interface ExamQuestion {
@@ -87,6 +88,7 @@ export interface ExamQuestion {
   isGraded: boolean;
   obtainedScore?: number;
   feedback?: string;
+  gradingError?: boolean; // If grading API failed
 }
 
 export interface ExamConfig {

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ExamSession, ExamQuestion, AIConfig } from '../../types';
 import { gradeExamQuestion, generateExamReport } from '../../services/examService';
-import { Loader2, CheckCircle2, X, BrainCircuit, CheckSquare, Square, PenTool, ChevronLeft, ChevronRight, BarChart2, AlertTriangle } from 'lucide-react';
+import { Loader2, CheckCircle2, X, BrainCircuit, CheckSquare, Square, PenTool, ChevronLeft, ChevronRight, BarChart2, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, LayoutGrid } from 'lucide-react';
 import { InlineParser, StandardTextBlock } from '../blocks/utils';
 import { ExamReportModal } from './ExamReportModal';
 
@@ -88,6 +88,9 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
     const [currentIndex, setCurrentIndex] = useState(0);
     const [gradingLoading, setGradingLoading] = useState<Record<string, boolean>>({});
     
+    // UI State
+    const [isMobileGridOpen, setIsMobileGridOpen] = useState(false);
+    
     // Report State
     const [isReportOpen, setIsReportOpen] = useState(false);
     const [reportContent, setReportContent] = useState('');
@@ -102,14 +105,30 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
     }>({ isOpen: false, title: '', content: '', onConfirm: () => {} });
 
     const scrollRef = useRef<HTMLDivElement>(null);
+    const textAreaRef = useRef<HTMLTextAreaElement>(null);
     
     useEffect(() => { onSave(exam); }, [exam]);
     useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTo({ top: 0, behavior: 'smooth' }); }, [currentIndex]);
 
+    // Auto resize textarea
+    const adjustTextareaHeight = () => {
+        if (textAreaRef.current) {
+            textAreaRef.current.style.height = 'auto';
+            textAreaRef.current.style.height = `${textAreaRef.current.scrollHeight}px`;
+        }
+    };
+
     const currentQuestion = exam.questions[currentIndex];
 
+    // Trigger resize when answer changes or question changes
+    useEffect(() => {
+        adjustTextareaHeight();
+    }, [currentQuestion.userAnswer, currentIndex]);
+
     const handleAnswerChange = (val: any) => {
-        if (currentQuestion.isGraded) return;
+        // Lock answer if graded OR if there was a grading error (prevent modifying while waiting to retry)
+        if (currentQuestion.isGraded || currentQuestion.gradingError) return;
+        
         const newQuestions = [...exam.questions];
         newQuestions[currentIndex] = { ...currentQuestion, userAnswer: val };
         setExam(prev => ({ ...prev, questions: newQuestions }));
@@ -117,12 +136,15 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
 
     const handleGradeSingle = async (index: number) => {
         const q = exam.questions[index];
-        if (q.isGraded || !q.userAnswer) return;
+        if (q.isGraded) return;
+        
+        // Clear previous error state before retrying
+        updateQuestion(index, { gradingError: false });
 
         // Local Grading Logic for Choices
         if (q.type === 'single_choice' || q.type === 'true_false') {
             const isCorrect = String(q.userAnswer).trim() === String(q.correctAnswer).trim();
-            updateQuestion(index, { isGraded: true, obtainedScore: isCorrect ? q.score : 0, feedback: isCorrect ? "回答正确" : "回答错误" });
+            updateQuestion(index, { isGraded: true, obtainedScore: isCorrect ? q.score : 0, feedback: isCorrect ? "回答正确" : "回答错误", gradingError: false });
             return;
         }
         if (q.type === 'multiple_choice') {
@@ -141,7 +163,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
             else if (correctCount === correctSet.size) { score = q.score; feedback = "回答正确"; }
             else { score = Math.floor((correctCount/correctSet.size)*q.score*2)/2; if(score<0.5 && correctCount>0) score=0.5; feedback = `部分正确 (${correctCount}个)`; }
             
-            updateQuestion(index, { isGraded: true, obtainedScore: score, feedback });
+            updateQuestion(index, { isGraded: true, obtainedScore: score, feedback, gradingError: false });
             return;
         }
 
@@ -149,7 +171,9 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
         setGradingLoading(prev => ({ ...prev, [q.id]: true }));
         try {
             const result = await gradeExamQuestion(q, q.userAnswer, aiConfig);
-            updateQuestion(index, { isGraded: true, obtainedScore: result.score, feedback: result.feedback });
+            updateQuestion(index, { isGraded: true, obtainedScore: result.score, feedback: result.feedback, gradingError: false });
+        } catch (e) {
+            updateQuestion(index, { isGraded: false, gradingError: true, feedback: "评分服务连接失败，请点击重试。" });
         } finally {
             setGradingLoading(prev => ({ ...prev, [q.id]: false }));
         }
@@ -164,42 +188,29 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
     };
 
     // Actual submission logic extracted for modal callback
-    const executeSubmitAll = () => {
-        const questionsToGrade = exam.questions.map((q, index) => ({ q, index })).filter(({ q }) => !q.isGraded);
+    const executeSubmitAll = async () => {
+        // Filter out questions that are ALREADY graded successfully.
+        // We DO include questions with gradingError to retry them.
+        const questionsToGrade = exam.questions.map((q, index) => ({ q, index }))
+            .filter(({ q }) => !q.isGraded); // !isGraded covers both 'ungraded' and 'gradingError=true'
+
         if (questionsToGrade.length === 0) { setExam(prev => ({ ...prev, status: 'submitted' })); return; }
 
         const newLoadingState = { ...gradingLoading };
         questionsToGrade.forEach(({ q }) => newLoadingState[q.id] = true);
         setGradingLoading(newLoadingState);
 
-        // Helper to finalize single result and update state
-        const finalizeResult = (index: number, score: number, feedback: string) => {
-            setExam(prev => {
-                const newQuestions = [...prev.questions];
-                newQuestions[index] = { ...newQuestions[index], isGraded: true, obtainedScore: score, feedback };
-                const allDone = newQuestions.every(q => q.isGraded);
-                return { ...prev, questions: newQuestions, status: allDone ? 'submitted' : prev.status };
-            });
-            setGradingLoading(prev => {
-                const next = { ...prev };
-                delete next[exam.questions[index].id];
-                return next;
-            });
-        };
-
-        // Process concurrently
-        questionsToGrade.forEach(async ({ q, index }) => {
+        // Process concurrently using map to handle individual failures
+        const promises = questionsToGrade.map(async ({ q, index }) => {
             // 1. Empty Answer -> 0 Score (No API)
             if (!q.userAnswer || (Array.isArray(q.userAnswer) && q.userAnswer.length === 0)) {
-                finalizeResult(index, 0, "未作答");
-                return;
+                return { index, success: true, score: 0, feedback: "未作答" };
             }
 
             // 2. Local Grading (No API)
             if (q.type === 'single_choice' || q.type === 'true_false') {
                 const isCorrect = String(q.userAnswer).trim() === String(q.correctAnswer).trim();
-                finalizeResult(index, isCorrect ? q.score : 0, isCorrect ? "回答正确" : "回答错误");
-                return;
+                return { index, success: true, score: isCorrect ? q.score : 0, feedback: isCorrect ? "回答正确" : "回答错误" };
             } 
             if (q.type === 'multiple_choice') {
                  const userAns = Array.isArray(q.userAnswer) ? q.userAnswer : [];
@@ -217,18 +228,52 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                      score = Math.max(0.5, Math.floor((correctCount/correctSet.size)*q.score*2)/2);
                      feedback = `部分正确 (选对${correctCount}个)`;
                  }
-                 finalizeResult(index, score, feedback);
-                 return;
+                 return { index, success: true, score, feedback };
             }
 
             // 3. AI Grading
             try {
                 const res = await gradeExamQuestion(q, q.userAnswer, aiConfig);
-                finalizeResult(index, res.score, res.feedback);
+                return { index, success: true, score: res.score, feedback: res.feedback };
             } catch (e) {
-                finalizeResult(index, 0, "批改异常");
+                return { index, success: false, feedback: "批改失败，请重试" };
             }
         });
+
+        // Wait for all to finish (resolve or return error object)
+        const results = await Promise.all(promises);
+
+        setExam(prev => {
+            const newQuestions = [...prev.questions];
+            let hasErrors = false;
+
+            results.forEach((res) => {
+                if (res.success) {
+                    newQuestions[res.index] = { 
+                        ...newQuestions[res.index], 
+                        isGraded: true, 
+                        obtainedScore: res.score, 
+                        feedback: res.feedback,
+                        gradingError: false
+                    };
+                } else {
+                    hasErrors = true;
+                    newQuestions[res.index] = { 
+                        ...newQuestions[res.index], 
+                        isGraded: false, 
+                        gradingError: true, 
+                        feedback: res.feedback 
+                    };
+                }
+            });
+
+            // Only mark exam as 'submitted' if ALL questions are successfully graded
+            // If some have errors, we stay in 'ready' (or 'in_progress') so user can retry specific questions
+            const allDone = newQuestions.every(q => q.isGraded);
+            return { ...prev, questions: newQuestions, status: allDone ? 'submitted' : prev.status };
+        });
+
+        setGradingLoading({});
     };
 
     const handleRequestSubmit = () => {
@@ -302,7 +347,9 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
     // Render helpers
     const renderInput = () => {
         const q = currentQuestion;
-        const disabled = q.isGraded;
+        // Lock if graded OR if there's a grading error (wait for retry)
+        const disabled = q.isGraded || q.gradingError;
+        
         if (q.type === 'single_choice' || q.type === 'true_false') {
             return (
                 <div className="space-y-2 mt-4">
@@ -357,15 +404,21 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
             );
         }
         return (
-            <textarea value={q.userAnswer as string || ''} onChange={e => handleAnswerChange(e.target.value)} disabled={disabled}
-                placeholder="请输入答案..." className="mt-4 w-full h-32 p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none disabled:bg-slate-50 disabled:text-slate-500 bg-white" />
+            <textarea 
+                ref={textAreaRef}
+                value={q.userAnswer as string || ''} 
+                onChange={e => handleAnswerChange(e.target.value)} 
+                disabled={disabled}
+                placeholder="请输入答案..." 
+                className="mt-4 w-full min-h-[120px] p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none disabled:bg-slate-50 disabled:text-slate-500 bg-white overflow-hidden" 
+            />
         );
     };
 
     return (
         <div className="fixed inset-0 z-[100] bg-slate-50 flex flex-col md:flex-row h-full">
             <div className="w-full md:w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
-                <div className="p-4 border-b border-slate-100 flex justify-between">
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center">
                     <div className="min-w-0">
                         <h2 className="font-bold text-slate-800 truncate">{exam.config.title}</h2>
                         <div className="flex justify-between text-xs text-slate-500 mt-1 gap-2">
@@ -375,19 +428,34 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                             )}
                         </div>
                     </div>
-                    <button onClick={onClose} className="md:hidden p-2"><X className="w-5 h-5" /></button>
+                    <div className="flex items-center gap-2">
+                        {/* Mobile: Toggle Grid */}
+                        <button onClick={() => setIsMobileGridOpen(!isMobileGridOpen)} className="md:hidden p-2 text-slate-500 bg-slate-50 rounded-lg hover:bg-slate-100">
+                            {isMobileGridOpen ? <ChevronUp className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
+                        </button>
+                        {/* Mobile: Close */}
+                        <button onClick={onClose} className="md:hidden p-2"><X className="w-5 h-5" /></button>
+                    </div>
                 </div>
-                <div className="flex-1 overflow-auto p-2">
+                
+                {/* Question Grid: Collapsible on mobile, always visible on desktop */}
+                <div className={`overflow-auto p-2 transition-all duration-300 ease-in-out md:flex-1 md:max-h-full ${isMobileGridOpen ? 'max-h-[60vh] border-b border-slate-200 shadow-sm' : 'max-h-0 md:max-h-full'}`}>
                     <div className="grid grid-cols-4 gap-2">
                         {exam.questions.map((q, i) => (
-                            <button key={i} onClick={() => setCurrentIndex(i)} 
-                                className={`w-full h-10 rounded-lg text-xs font-bold relative ${currentIndex===i?'ring-2 ring-indigo-500':''} ${q.isGraded?(q.obtainedScore===q.score?'bg-emerald-100 text-emerald-700':q.obtainedScore!>0?'bg-amber-100 text-amber-700':'bg-red-100 text-red-700'):(q.userAnswer?'bg-indigo-50 text-indigo-700':'bg-slate-100 text-slate-400')}`}>
+                            <button key={i} onClick={() => { setCurrentIndex(i); setIsMobileGridOpen(false); }} 
+                                className={`w-full h-10 rounded-lg text-xs font-bold relative 
+                                    ${currentIndex===i?'ring-2 ring-indigo-500':''} 
+                                    ${q.gradingError ? 'bg-red-50 text-red-500 border border-red-200' :
+                                      q.isGraded ? (q.obtainedScore===q.score?'bg-emerald-100 text-emerald-700':q.obtainedScore!>0?'bg-amber-100 text-amber-700':'bg-red-100 text-red-700') : 
+                                      (q.userAnswer?'bg-indigo-50 text-indigo-700':'bg-slate-100 text-slate-400')}`}>
                                 {i+1}
                                 {gradingLoading[q.id] && <div className="absolute top-0 right-0 w-2 h-2 bg-indigo-500 rounded-full animate-ping"></div>}
+                                {q.gradingError && <div className="absolute bottom-0 right-0 w-2 h-2 bg-red-500 rounded-full"></div>}
                             </button>
                         ))}
                     </div>
                 </div>
+                
                 <div className="p-4 border-t border-slate-100 space-y-2 hidden md:block">
                     <button onClick={onClose} className="w-full py-2 bg-white border rounded-lg text-sm">暂时离开</button>
                     {exam.status === 'submitted' ? (
@@ -403,7 +471,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
             <div className="flex-1 flex flex-col h-full overflow-hidden">
                 <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 pb-20">
                     <div className="max-w-3xl mx-auto">
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+                        <div className={`bg-white rounded-2xl shadow-sm border p-6 md:p-8 ${currentQuestion.gradingError ? 'border-red-200' : 'border-slate-200'}`}>
                             <div className="flex justify-between mb-4">
                                 <div className="flex gap-2">
                                     <span className="px-2 py-1 bg-slate-100 rounded text-xs font-bold uppercase">{getTypeName(currentQuestion.type)}</span>
@@ -416,42 +484,63 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({ exam: initialExam, aiCon
                                             得分: {currentQuestion.obtainedScore || 0}
                                         </span>
                                     )}
+                                    {currentQuestion.gradingError && (
+                                        <span className="px-2 py-1 rounded text-xs font-bold text-white bg-red-500 flex items-center gap-1">
+                                            <AlertTriangle className="w-3 h-3" /> 评分失败
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="text-slate-400 text-sm font-mono">{currentIndex + 1} / {exam.questions.length}</div>
                             </div>
                             <BlockRenderer content={currentQuestion.content} className="text-lg font-medium" />
                             {renderInput()}
-                            {!currentQuestion.isGraded && currentQuestion.userAnswer && (
+                            {!currentQuestion.isGraded && currentQuestion.userAnswer && !currentQuestion.gradingError && (
                                 <div className="mt-4 flex justify-end">
                                     <button onClick={() => handleGradeSingle(currentIndex)} disabled={gradingLoading[currentQuestion.id]} className="flex items-center gap-2 text-indigo-600 text-sm font-medium px-3 py-1.5 hover:bg-indigo-50 rounded-lg">
                                         {gradingLoading[currentQuestion.id] ? <Loader2 className="w-4 h-4 animate-spin"/> : <PenTool className="w-4 h-4"/>} 提前批改
                                     </button>
                                 </div>
                             )}
+                            {currentQuestion.gradingError && (
+                                <div className="mt-4 flex justify-end">
+                                    <button onClick={() => handleGradeSingle(currentIndex)} className="flex items-center gap-2 text-red-600 text-sm font-bold px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200">
+                                        <RefreshCw className="w-4 h-4" /> 重试评分
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                        {currentQuestion.isGraded && (
-                            <div className="mt-6 bg-slate-50 rounded-xl border border-slate-200 p-6 animate-in slide-in-from-bottom-4">
-                                <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><BrainCircuit className="w-5 h-5 text-indigo-500"/> AI 批改与解析</h4>
+                        {(currentQuestion.isGraded || currentQuestion.gradingError) && (
+                            <div className={`mt-6 rounded-xl border p-6 animate-in slide-in-from-bottom-4 ${currentQuestion.gradingError ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
+                                <h4 className={`font-bold mb-4 flex items-center gap-2 ${currentQuestion.gradingError ? 'text-red-700' : 'text-slate-800'}`}>
+                                    {currentQuestion.gradingError ? <AlertTriangle className="w-5 h-5"/> : <BrainCircuit className="w-5 h-5 text-indigo-500"/>} 
+                                    {currentQuestion.gradingError ? "批改服务异常" : "AI 批改与解析"}
+                                </h4>
                                 <div className="space-y-4 text-sm">
                                     <div className="bg-white p-4 rounded-lg border border-slate-100">
                                         <div className="text-xs text-slate-400 font-bold mb-1">AI 点评</div>
-                                        <BlockRenderer content={currentQuestion.feedback || "暂无点评"} className="text-slate-700" />
-                                    </div>
-                                    <div className="bg-white p-4 rounded-lg border border-slate-100">
-                                        <div className="text-xs text-slate-400 font-bold mb-1">正确答案</div>
-                                        <div className="text-emerald-700 font-bold">
-                                            <InlineRenderer content={
-                                                Array.isArray(currentQuestion.correctAnswer) 
-                                                ? currentQuestion.correctAnswer.join(", ") 
-                                                : (currentQuestion.correctAnswer === true ? "True" : (currentQuestion.correctAnswer === false ? "False" : String(currentQuestion.correctAnswer)))
-                                            } />
+                                        <div className={currentQuestion.gradingError ? "text-red-600" : "text-slate-700"}>
+                                            <BlockRenderer content={currentQuestion.feedback || "暂无点评"} />
                                         </div>
                                     </div>
-                                    {currentQuestion.analysis && (
-                                        <div className="bg-white p-4 rounded-lg border border-slate-100">
-                                            <div className="text-xs text-slate-400 font-bold mb-1">详细解析</div>
-                                            <BlockRenderer content={currentQuestion.analysis} className="text-slate-600" />
-                                        </div>
+                                    {!currentQuestion.gradingError && (
+                                        <>
+                                            <div className="bg-white p-4 rounded-lg border border-slate-100">
+                                                <div className="text-xs text-slate-400 font-bold mb-1">正确答案</div>
+                                                <div className="text-emerald-700 font-bold">
+                                                    <InlineRenderer content={
+                                                        Array.isArray(currentQuestion.correctAnswer) 
+                                                        ? currentQuestion.correctAnswer.join(", ") 
+                                                        : (currentQuestion.correctAnswer === true ? "True" : (currentQuestion.correctAnswer === false ? "False" : String(currentQuestion.correctAnswer)))
+                                                    } />
+                                                </div>
+                                            </div>
+                                            {currentQuestion.analysis && (
+                                                <div className="bg-white p-4 rounded-lg border border-slate-100">
+                                                    <div className="text-xs text-slate-400 font-bold mb-1">详细解析</div>
+                                                    <BlockRenderer content={currentQuestion.analysis} className="text-slate-600" />
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </div>
